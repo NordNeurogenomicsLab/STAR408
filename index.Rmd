@@ -35,6 +35,7 @@ library(ggpmisc)
 library(RColorBrewer)
 library(plotly)
 library(DT)
+library(GenomicRanges)
 
 # Directory structure
 github_dir <- file.path("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408")
@@ -999,7 +1000,7 @@ data.all$Pass_prop_DNA_and_RNA <- ifelse(data.all$RNA_prop_mean > 2^-15 &
 data.all$Passed_QC <- ifelse(data.all$Pass_DNA_count == TRUE & 
                              data.all$Pass_prop_DNA_and_RNA == TRUE, T, F)
 
-## DNA prop + RNA prop + DNA count threshols + Posidite MSD. PASS = 219
+## DNA prop + RNA prop + DNA count threshols + Positive MSD. PASS = 219
 data.all$Passed_QC_with_SD <- ifelse(data.all$Pass_DNA_count == TRUE & 
                                      data.all$Pass_prop_DNA_and_RNA == TRUE & 
                                      data.all$Pass_MeanRatio_SD == TRUE, TRUE, FALSE)
@@ -1009,7 +1010,8 @@ data.all$Passed_QC_with_SD <- ifelse(data.all$Pass_DNA_count == TRUE &
 ## subset to data passing both DNA count and proportion thresholds 
 data.clean <- dplyr::filter(data.all, Passed_QC == TRUE & At_least_1_specific_in_sil_prod == TRUE) # 308 amplicons
 
-## REVISIT!!! # <- why this and not MeanRatio_MoM?? TRY the alternative.
+## NOTE: Why MeanRatio, not MeanRatio_MoM?? KC: MeanRatio_MoM is a valid alternative, but it's confusing when prop. DNA vs prop. RNA are plotted.
+
 data.clean$Act_Rank_Clean <- rank(data.clean$MeanRatio) 
 
 
@@ -1034,23 +1036,46 @@ GC content is a covariate of the lm model, significantly improving its performan
 ## do lm with and without gc as variable on mean prop data
 mod_training_with_GC <- lm(log2(RNA_prop_mean) ~ log2(DNA_prop_mean) + GC, data = data.for.lm)
 mod_training_without_GC <- lm(log2(RNA_prop_mean) ~ log2(DNA_prop_mean), data = data.for.lm)
+```
 
+### 7.1.1 lm model without GC
+```{r}
 
 summary(mod_training_without_GC)
+
+par(mfrow = c(2, 2))
+plot(mod_training_without_GC)
+```
+
+### 7.1.2 lm model with GC
+```{r}
+
 summary(mod_training_with_GC)
 
-BIC(mod_training_without_GC)
-BIC(mod_training_with_GC)
+par(mfrow = c(2, 2))
+plot(mod_training_with_GC)
+```
 
+BIC without GC covariate
+```{r}
+BIC(mod_training_without_GC)
+```
+
+BIC with GC covariate. Lower value justifies GC addition to the model.
+```{r}
+BIC(mod_training_with_GC)
 ```
 
 
 ```{r}
 
 ## use lm to predict residuals of dataset for prediction (data.predict)
-# consider data.clean with 308 amplicons or xxx with 323.
+# consider data.clean with 308 amplicons 
 
-data.predict <- dplyr::filter(data.all, Pass_DNA_count == TRUE) # 321 amplicons
+# data.predict <- dplyr::filter(data.all, Pass_DNA_count == TRUE) # 321 amplicons
+
+# NOTE: This edit has not been approved yet:
+data.predict <- data.clean  # KC: replaced by data.clean to limit the confusion from showing amplicons with reduced activity that do not pass stringent QC.
 
 predict_data.predict <- predict(mod_training_with_GC, newdata = data.predict, interval = "confidence")
 predict_data.predict <- as.data.frame(predict_data.predict)
@@ -1080,7 +1105,7 @@ data.predict$FDR <- p.adjust(data.predict$Pvalue, method = "BH")
 
 ```
 
-## Model exploratory plots
+## 7.2 Model exploratory plots - under construction
 ```{r}
 
 data.predict$training <- ifelse(data.predict$Amp_name %in% data.for.lm$Amp_name, TRUE, FALSE)
@@ -1101,14 +1126,62 @@ ggplot()+
 
 ```
 
-### Manuscript figures
+## 7.3 Major figures
 
-#### Fig. 1D
+### 7.3.1 Fig. 1D
 
-```{r, fig.cap = "Fig. 1D (right) Amplicons tested by the multiple linear model (N = 321), with those with significant (FDR < 0.05 and P < 0.05) increase in RNA compared to DNA (red and light red, respectively) versus those with significant (FDR < 0.05 and P < 0.05) decrease in RNA compared to DNA (blue and light blue, respectively)."}
+```{r, fig.cap = "Fig.1D (left) Correlation of mean RNA/DNA ratio in the assay of all amplicons detected in the previral library (n = 407). Dashed line represents RNA/DNA best-fit line of the data (n = 248). Amplicons are colored by whether they were found significant (P < 0.05) using the multiple linear model. (right) Amplicons tested by the multiple linear model (N = 308), with those with significant (FDR < 0.05 and P < 0.05) increase (red, light red) or decrease (blue, light blue) in RNA compared to DNA.", fig.width = 5, fig.height = 4, dpi=300, out.width="70%", out.height="70%"}
+
+# Left
+
+p1 <- ggplot() + 
+  geom_point(data = data.all[! data.all$Amp_name %in% data.predict$Amp_name[data.predict$Pvalue < 0.05],], 
+             aes(x = log2(DNA_prop_mean), y = log2(RNA_prop_mean), color = "Non-Significant"), 
+             alpha = 0.3, size = 1, shape = 16) + 
+  geom_point(data = data.predict[data.predict$Pvalue < 0.05,], 
+             aes(x = log2(DNA_prop_mean), y = log2(RNA_prop_mean), color = "Significant"),
+             alpha = 0.5, size = 1, shape = 16) + 
+  scale_color_manual(values = c("Significant" = "black", 
+                                "Non-Significant" = "grey50")) + 
+  labs(title = "Mean Amplicon Correlation", color = NULL,
+       x = bquote(log[2]~mean(proportion[DNA])), 
+       y = bquote(log[2]~mean(proportion[RNA]))) +
+  geom_smooth(data = data.for.lm, aes(x = log2(DNA_prop_mean), y = log2(RNA_prop_mean)), 
+              formula = y ~ x, method = 'lm', se = F, color = "black", size = 0.5, linetype = 2, fullrange = T) +
+  # lims(x = c(-15,-5), y = c(-20, -5)) + 
+  coord_fixed() + 
+  guides(color = guide_legend(ncol = 1, override.aes = list(size = 2))) + 
+  theme_bw() + theme(text = element_text(size = 8), 
+                     plot.title = element_text(size = 8, hjust = 0.5), 
+                     axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+                     legend.position = "right")+
+   theme(panel.grid.minor = element_blank())
+
+#p1
+
+#ggsave("G:/Shared drives/Nord Lab - Temp Overflow/STARR-408_Lambert&Su-Feher/Draft Figures/Figure #1/FIG1D_AllData_with_lm_KC.svg", 
+#       plot = p1, dpi = 300, width = 3, height = 5)
+
+#ggsave("G:/Shared drives/Nord Lab - Temp Overflow/STARR-408_Lambert&Su-Feher/Draft Figures/Figure #1/FIG1D_AllData_with_lm_KC.png", 
+#       plot = p1, dpi = 300, width = 3, height = 5)
+
+# Right
+
+# Gradation of data filtering steps:
+
+# 1. data.all = 407 amplicons
+
+# data.clean = 308 amplicons; Passed_QC (Pass_DNA_count, Pass_prop_DNA_and_RNA) & 
+#                                                 At_least_1_specific_in_sil_prod
+# NOTE: data.clean was used for selecting the training set of 248 amplicons, and 30 + 30 tails
+
+# data.predict = 321 amplicons; Pass_DNA_count, relaxed data.clean set. Edited. Now data.predict = data.clean
+
+
 
 ## FIGURE 1C with data.predict
 
+# This is effectively replacing data.predict with data.clean)
 fig.1c <- data.predict
 
 # Significance annotation
@@ -1127,7 +1200,7 @@ fig.1c$Sig <- ifelse(fig.1c$FDR < 0.05 & fig.1c$Residuals_Manual < 0,
 fig.1c$Sig <- factor(fig.1c$Sig, levels = c("FDR < 0.05,  Res. > 0", "P < 0.05,  Res. > 0", "FDR < 0.05,  Res. < 0", "P < 0.05,  Res. < 0", "Non-Significant"))
 
 
-p <- ggplot(fig.1c, aes(x = log2(DNA_prop_mean), y = log2(RNA_prop_mean), color = Sig))+ 
+p2 <- ggplot(fig.1c, aes(x = log2(DNA_prop_mean), y = log2(RNA_prop_mean), color = Sig))+ 
              geom_point(alpha = 0.7, size = 1, shape = 16)+ 
  
  scale_color_manual(values = c("Non-Significant" = "grey",
@@ -1139,28 +1212,47 @@ p <- ggplot(fig.1c, aes(x = log2(DNA_prop_mean), y = log2(RNA_prop_mean), color 
   labs(title = "Mean Amplicon Correlation", color = NULL,
        x = bquote(log[2]~mean(proportion[DNA])), 
        y = bquote(log[2]~mean(proportion[RNA]))) +
-  lims(x = c(-15,-5), y = c(-20, -5)) +
+  lims(x = c(-15,-5), y = c(-15, -5)) +
   coord_fixed() + 
   guides(color = guide_legend(ncol = 1, override.aes = list(size = 2))) + 
   theme_bw() + theme(text = element_text(size = 8), 
                      plot.title = element_text(size = 8, hjust = 0.5), 
                      axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
-                     legend.position = "right", legend.margin = margin(0,0,0,-10))
+                     legend.position = "right")+
+  theme(panel.grid.minor = element_blank())
 
- p    
+ #p2    
 
- ggsave("G:/Shared drives/Nord Lab - Temp Overflow/STARR-408_Lambert&Su-Feher/Draft Figures/Figure 1/FIG1D_CleanedData_by_P_and_Residual_KC.png", 
-       plot = p, dpi = 300, width = 3, height = 5)
+# ggsave("G:/Shared drives/Nord Lab - Temp Overflow/STARR-408_Lambert&Su-Feher/Draft Figures/Figure #1/FIG1D_CleanedData_by_P_and_Residual_KCv2.png", 
+#       plot = p2, dpi = 300, width = 3, height = 5)
 
-ggsave("G:/Shared drives/Nord Lab - Temp Overflow/STARR-408_Lambert&Su-Feher/Draft Figures/Figure 1/FIG1D_CleanedData_by_P_and_Residual_KC.svg", 
-       plot = p, dpi = 300, width = 3, height = 5)
+#ggsave("G:/Shared drives/Nord Lab - Temp Overflow/STARR-408_Lambert&Su-Feher/Draft Figures/Figure #1/FIG1D_CleanedData_by_P_and_Residual_KCv2.svg", 
+#       plot = p2, dpi = 300, width = 3, height = 5)
 
- 
- 
+ #
+
+library(gridExtra)
+
+grid.arrange(p1+theme(legend.position = "bottom"), 
+             p2+theme(legend.position = "bottom"), 
+             nrow = 1)
+
+
 ```
 
-#### Fig. 2A
-```{r, fig.cap="Fig. 2A. Bar plot representing distribution of activity in the test assay, sorted by linear model residual. Amplicons are colored as in Figure 1D. MPRA amplicons passing Passed_QC_with_SD; DNA prop > 2^-15 & RNA prop > 2^-15 & DNA count > 200 in all 4 samples; n = 219 amplicons"}
+### 7.3.2 Summary table
+```{r}
+# Coordinates are in GRCh38
+
+datatable(
+  arrange(data.predict, desc(Residuals_Z_scaled_to_lm))[,c("Amp_name", "Chr", "Start", "End", "MeanRatio", "MeanRatio_sd", "training", "Residuals_Z_scaled_to_lm", "Pvalue", "FDR")], 
+  rownames = FALSE)
+
+```
+
+
+### 7.3.3 Fig. 2A
+```{r, fig.cap="Fig. 2A. Bar plot representing distribution of activity in the test assay, sorted by linear model residual. Amplicons are colored as in Figure 1D. MPRA amplicons passing Passed_QC_with_SD; DNA prop > 2^-15 & RNA prop > 2^-15 & DNA count > 200 in all 4 samples; n = 219 amplicons", fig.width = 7, fig.height = 4}
 
 ## FIG1D Variant: Bar plot with ratio mean and all 4 samples for ALL data,
 ## and inset showing just sig (p < 0.05) for up and down
@@ -1247,5 +1339,383 @@ ggsave("G:/Shared drives/Nord Lab - Temp Overflow/STARR-408_Lambert&Su-Feher/Dra
 
 ```
 
+### 7.3.4 Fig. 2B
 
- 
+```{r, fig.cap = "Fig.2B. The top 18 active amplicons with consistent activity across both linear models and ratiometric models. Three amplicons were used for downstream validation in single-candidate deliveries (6_LD, 3_LD, 161_FBDHS). Bar for all plots represents mean RNA/DNA ratio. Each dot represents individual RNA/DNA ratios for each amplicon (4 dots per amplicon)."}
+
+## Sanity check for reporting amplicon number 
+df <- data.predict
+df$MeanRatio_m_SD <- df$MeanRatio - df$MeanRatio_sd
+#nrow(df) # 308 all amplicons                          
+#nrow(filter(df, Pvalue < 0.05)) # 77  Significant amplicons
+#nrow(filter(df, Pvalue < 0.05, Residuals_Z_scaled_to_lm > 0)) # 36 positive amplicons
+#nrow(filter(df, Pvalue < 0.05, Residuals_Z_scaled_to_lm > 0, MeanRatio_m_SD > 1.5)) # 18 positive amplicons with (MeanRatio - MeanRatio_sd) > 1.5
+
+#nrow(filter(df, MeanRatio_m_SD > 0, MeanRatio > 1.5)) # 71 amplicons with mean ration > 1 SD, and mean ration > 1.5
+
+active_amplicons_in_regression_model <- filter(df, Pvalue < 0.05, Residuals_Z_scaled_to_lm > 0)$Amp_name  # 36 amplicons
+active_amplicons_in_ratiometric_comparison <- filter(df, MeanRatio > 1)$Amp_name                          # 156 amplicons
+
+#setdiff(active_amplicons_in_regression_model, active_amplicons_in_ratiometric_comparison) # 0 amplicons = complete inclusion of active_amplicons_in_regression_model
+
+
+# Figure 2B, Fig2B
+     
+fig.1d.bar <- filter(df, Pvalue < 0.05, Residuals_Z_scaled_to_lm > 0, MeanRatio_m_SD > 1.5)
+#dim(fig.1d.bar)
+
+# Color addition is unnecessary
+fig.1d.bar$Color <- ifelse(fig.1d.bar$Pvalue >= 0.05, "Non-Significant", "Significant (resd. > 0)")
+fig.1d.bar$Color <- ifelse(fig.1d.bar$Pvalue < 0.05 & fig.1d.bar$Residuals_Manual < 0, "Significant (resd. < 0)", fig.1d.bar$Color)
+
+fig.1d.bar <- fig.1d.bar[order(fig.1d.bar$Residuals_Manual, decreasing = F),]
+fig.1d.bar$Amp_name <- factor(fig.1d.bar$Amp_name, levels = fig.1d.bar$Amp_name)
+
+fig.1d.bar.melt <- melt(fig.1d.bar[,c("Amp_name", "L1_Activity", "L2_Activity", "L3_Activity", "L4_Activity")], id.vars = "Amp_name")
+
+p <- ggplot(fig.1d.bar) + 
+  geom_bar(data = fig.1d.bar, 
+           aes(x = Amp_name, y = MeanRatio, fill = Color), 
+           stat = "identity", alpha = 0.5, width = 0.75) +
+  geom_line(data = fig.1d.bar.melt, 
+            aes(x = Amp_name, y = value, group = Amp_name), 
+            size = 0.25, alpha = 0.5, color = "black") + 
+  geom_point(data = fig.1d.bar.melt,
+             aes(x = Amp_name, y = value), 
+             size = 0.5, alpha = 0.75, color = "black", shape = 16) +
+  labs(x = "Amplicons",
+       y = bquote(Mean(RNA/DNA~Ratio)),
+       fill = NULL,
+       title = "Amplicons with p < 0.05 and resd. > 0") + 
+  theme_bw() + theme(text = element_text(size = 8), 
+                     plot.title = element_text(size = 8, hjust = 0.5), 
+                     axis.text.x = element_blank(), 
+                     axis.ticks.x = element_blank(), 
+                     # panel.background = element_rect(fill = "white"), 
+                     panel.grid.major.x = element_blank(),
+                     panel.grid.minor = element_blank(),
+                     # panel.grid.major.y = element_line(size = 0.5),
+                     legend.position = "none")+
+  scale_fill_manual(values = c("Significant (resd. > 0)" = "blue",
+                               "Significant (resd. < 0)" = "red",
+                               "Non-Significant" = "grey50"))+
+  theme(text = element_text(size = 10), axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
+
+p
+
+```
+
+# 8. Epigenomic intersections
+
+## 8.1 Roadmap data download
+
+```{r}
+
+# Original version of this analysis can be found here: 
+
+require("RCurl") 
+library(XML)
+library(R.utils)
+
+# Sample identity: https://egg2.wustl.edu/roadmap/web_portal/processed_data.html
+# E81 - Fetal Brain Male
+# E82 - Fetal Brain Female
+
+#setwd("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408/Epigenomics_intersections")
+
+# Creates a subdir for downloading Roadmap peak data
+peak_dir <- "Roadmap_consolidated_peaks/"
+dir.create(peak_dir, showWarnings = FALSE)
+
+# Downloads data
+url_narrowPeak = "https://egg2.wustl.edu/roadmap/data/byFileType/peaks/consolidated/narrowPeak/"
+
+# Get links
+result <- getURL(url_narrowPeak, verbose=TRUE, ftp.use.epsv=TRUE, dirlistonly = TRUE)
+gz_files <- getHTMLLinks(result,  xpQuery = "//a/@href[contains(., '.gz')]")
+download_files <- gz_files[grepl("E081|E082", gz_files)]        # grepl Male and Female fetal samples
+
+# Check if files are present in a directory:
+if(all(list.files(peak_dir) %in% gsub(".gz","", download_files))){
+  
+  message("Files exist")
+  
+} else {
+
+
+# Proactively removes all files in the peak_dir
+setwd(peak_dir)
+file.remove(list.files())
+setwd("../")
+
+# Download
+sapply(download_files, function(x) 
+  download.file(paste0(url_narrowPeak, x), paste0(peak_dir, x)))
+
+# Gunzip
+sapply(download_files, function(x) 
+  gunzip(paste0(peak_dir, x)))
+
+}
+
+```
+
+## 8.2 Adding hg19 coordinates
+
+```{r}
+# Reading and preparing amplicons and hg19 primer coordinate data
+
+# I'm merging primers and star datasets to translate GRCh38 to hg19.
+# Primers use hg19 coordinates. star408 amplicons use GRCh38 coordinates. isPCR was also run against GRCh38 genome.
+
+primers <- read.csv("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408/In_silico_PCR_STAR408/STAR408_primers.csv", header = TRUE, fill = TRUE)
+
+primers$Chr <- gsub('.*?([0-9XY]+).*', '\\1', primers$Amplicon.Range)
+amp_range <- gsub('.*?[0-9XY]+:(d*)+d*', '\\1', primers$Amplicon.Range)
+primers$Start <- gsub('([^+]*).*', '\\1', amp_range, perl = TRUE)
+primers$Stop <-gsub('.*\\+([^+]*)', '\\1', amp_range, perl = TRUE)
+primers <- primers[,c(12:14, 1:11)]
+
+hg19_coordinates <- primers[,c(1:3, 12)]
+#head(hg19_coordinates)
+
+# Readign the final MPRA analysis set
+# star408 <- read.csv("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408/CSV_output_files/STAR408_lm_model_complete_dataset_408_amplicons.csv")
+# amplicons_309 <- filter(star408, Pass_prop_DNA_and_RNA == TRUE, Pass_DNA_count == TRUE)
+
+#amplicons_321 <- read.csv("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408/CSV_output_files/STAR408_data.predict.N321.csv")
+
+# NOTE: KC. Earlier version was using an expanded set of 321 amplicons. We are reverting to a set of 308 for consistency and stringency.
+
+# Amp_Full_Name
+#data.predict$Amp_name
+
+# Linda changed amp names. I'll be matching Amp names in primers / hg19_coordinates so I can merge them.
+#hg19_coordinates$Amplicon
+hg19_coordinates$Amplicon.ID_new <- gsub("Epilepsy", "EPIL", hg19_coordinates$Amplicon)
+hg19_coordinates$Amplicon.ID_new <- gsub("SZ108", "SCZ", hg19_coordinates$Amplicon.ID_new)
+hg19_coordinates$Amplicon.ID_new <- gsub("NCASD", "FBDHS", hg19_coordinates$Amplicon.ID_new)
+hg19_coordinates$Amplicon.ID_new <- gsub("Controls", "PutEnh", hg19_coordinates$Amplicon.ID_new)
+
+#hg19_coordinates$Amplicon.ID_new
+
+data.predict$Amp_Full_Name <- gsub("Epilepsy", "EPIL", data.predict$Amp_Full_Name)
+data.predict$Amp_Full_Name <- gsub("SZ108", "SCZ", data.predict$Amp_Full_Name)
+data.predict$Amp_Full_Name <- gsub("NCASD", "FBDHS", data.predict$Amp_Full_Name)
+data.predict$Amp_Full_Name <- gsub("Controls", "PutEnh", data.predict$Amp_Full_Name)
+data.predict$Amp_Full_Name <- gsub("Control", "PutEnh", data.predict$Amp_Full_Name)
+
+data.predict$Amp_Full_Name <- gsub("252_PutEnh_Arid1b_1", "252_PutEnh", data.predict$Amp_Full_Name)
+data.predict$Amp_Full_Name <- gsub("253_PutEnh_NEG1", "253_PutEnh", data.predict$Amp_Full_Name)
+data.predict$Amp_Full_Name <- gsub("255_PutEnh_Klhl32_hs676", "255_PutEnh", data.predict$Amp_Full_Name)
+data.predict$Amp_Full_Name <- gsub("257_PutEnh_Btrc_hs897", "257_PutEnh", data.predict$Amp_Full_Name)
+data.predict$Amp_Full_Name <- gsub("258_PutEnh_Arx_hs122", "258_PutEnh", data.predict$Amp_Full_Name)
+data.predict$Amp_Full_Name <- gsub("259_PutEnh_Scn1a", "259_PutEnh", data.predict$Amp_Full_Name)
+data.predict$Amp_Full_Name <- gsub("264_PutEnh_NEG4", "264_PutEnh", data.predict$Amp_Full_Name)
+data.predict$Amp_Full_Name <- gsub("266_PutEnh_Etv1_hs550", "266_PutEnh", data.predict$Amp_Full_Name)
+
+# Arid1b_1 and Arid1b_3 are overlapping. Dropping Arid1b_3.
+hg19_coordinates <- hg19_coordinates[!hg19_coordinates$Amplicon.ID_new == "265_PutEnh",]
+
+#data.frame(data.predict$Amp_name, data.predict$Amp_name2, data.predict$Amp_Full_Name)
+
+#setdiff(hg19_coordinates$Amplicon.ID_new, data.predict$Amp_Full_Name) # 99
+#setdiff(data.predict$Amp_Full_Name, hg19_coordinates$Amplicon.ID_new) # 0 - fixed
+
+
+
+#head(hg19_coordinates)
+#head(data.predict)
+colnames(hg19_coordinates) <- c("Chr_hg19", "Start_hg19", "Stop_hg19", "Amplicon.ID", "Amplicon.ID_new")
+
+data.predict_w_hg19_coord <- merge(hg19_coordinates, data.predict, 
+                                    by.x = "Amplicon.ID_new", by.y = "Amp_Full_Name")
+
+colnames(data.predict_w_hg19_coord) <-  gsub("\\<Start\\>","Start_GRCh38", colnames(data.predict_w_hg19_coord))
+colnames(data.predict_w_hg19_coord) <-  gsub("\\<End\\>","End_GRCh38", colnames(data.predict_w_hg19_coord))
+colnames(data.predict_w_hg19_coord) <-  gsub("\\<Chr\\>","Chr_GRCh38", colnames(data.predict_w_hg19_coord))
+
+#colnames(data.predict_w_hg19_coord) 
+
+#nrow(data.predict_w_hg19_coord)
+#nrow(hg19_coordinates)
+#nrow(data.predict)
+
+# Generating MPRA GR object
+data.predict_w_hg19_coord <- data.predict_w_hg19_coord[,c(2:4, 7:9, 1,5, 10:67)]
+colnames(data.predict_w_hg19_coord) <- c("Chr", "Start", "End", colnames(data.predict_w_hg19_coord)[4:66])
+
+
+data.predict_w_hg19_coord$Chr <- paste0("chr", data.predict_w_hg19_coord$Chr) # For compatibility
+data.predict_w_hg19_coord_GR <- makeGRangesFromDataFrame(data.predict_w_hg19_coord)
+values(data.predict_w_hg19_coord_GR) <- data.predict_w_hg19_coord[,4:66]
+
+```
+
+## 8.3 Calculate intersections
+
+```{r}
+
+source("epi_mark_intersection.R")
+library(data.table)
+
+# Calculate interactions
+calculate_interactions <- function(samples, epi_marks, q_values){
+
+l <- lapply(epi_marks, function(y){
+lapply(q_values, function(x){
+  
+  epi_mark_intersection(y, samples, x)
+  
+  })  
+})
+
+df <- rbindlist(lapply(1:length(l), function(x) rbindlist(l[[x]])))  # there must be a better way...
+
+df$Epi_mark <- gsub("DNase.macs2", "DNase", df$Epi_mark)
+
+df$Significance <- ifelse(df$P_values_sampling >= 0.05, "Non-significant", "NA")
+df$Significance <- ifelse(df$P_values_sampling < 0.05, "P < 0.05", df$Significance)
+df$Significance <- ifelse(df$P_values_sampling < 0.01, "P < 0.01", df$Significance)
+
+
+df_m <- melt(df, id.vars = c("Condition", "Epi_mark", "Epi_peak_q_value", "Fraction_intersecting", "P_values_sampling", "Significance"))
+
+df_m <- arrange(df_m, desc(Epi_peak_q_value))
+df_m$Epi_peak_q_value <- factor(df_m$Epi_peak_q_value, levels = unique(as.numeric(df_m$Epi_peak_q_value)))
+
+# Peak mark order
+df_m$Epi_mark <- factor(df_m$Epi_mark, levels = c("DNase", "H3K27ac", "H3K9ac", "H3K4me1", "H3K4me3", "H3K36me3", "H3K9me3", "H3K27me3"))
+
+# Better condition names
+df_m$Condition <- ifelse(df_m$Condition == "Low", "Low, P < 0.05", df_m$Condition)
+df_m$Condition <- ifelse(df_m$Condition == "High", "High, P < 0.05", df_m$Condition)
+df_m$Condition <- ifelse(df_m$Condition == "Middle", "Middle, P > 0.05", df_m$Condition)
+
+# Legend items order
+df_m$Condition <- factor(df_m$Condition, levels = c("High", "High, P < 0.05",
+                                                    "Middle", "Middle, P > 0.05",
+                                                    "Low", "Low, P < 0.05"))
+
+df_m$Significance <- factor(df_m$Significance, levels = c("P < 0.01", "P < 0.05","Non-significant"))
+
+df_m
+
+}
+
+# Male and Female "E081", "E082" datasets are merged together in this approach. Intersection indicates overlap between any of the samples.
+
+
+# This is loaded from a file to speed up report generation
+if(file.exists("Epi_interst.RData")){
+  
+  load("Epigenomics_intersections/Epi_interst.RData")
+  
+} else {
+  
+df_m <- calculate_interactions(c("E081", "E082"), 
+                               c("DNase.macs2", "H3K27me3", "H3K36me3", "H3K4me1", "H3K4me3", "H3K9me3"), 
+                               c(1, 0.05, 0.01))
+
+#save(df_m, file = "Epi_interst.RData")    
+  
+}
+
+# Simplifies condition names:
+  df_m$Condition <- ifelse(df_m$Condition == "Low, P < 0.05", "Low", as.character(df_m$Condition))
+  df_m$Condition <- ifelse(df_m$Condition == "Middle, P > 0.05", "Middle", as.character(df_m$Condition))
+  df_m$Condition <- ifelse(df_m$Condition == "High, P < 0.05", "High", as.character(df_m$Condition))
+
+
+```
+
+## 8.4 Intersections across peak q values
+```{r, fig.width = 10, fig.height = 6}
+
+# Intersections across Peak q values
+title = "Fetal Brain Male and Female"
+
+ggplot(df_m, aes(x = Epi_peak_q_value, y = Fraction_intersecting, color = Condition, group = Condition, 
+                 shape = Significance))+
+  geom_point(size = 3, alpha = 0.3)+
+  geom_line()+
+  labs(x = "Roadmap epigenomic MACS2 peak q value threshold", y = paste0("Fraction of amplicons overlapping with epigenomic peaks"))+
+  expand_limits(y = 0)+
+  theme_bw()+
+  theme(plot.title = element_text(hjust = 0.5))+
+  facet_grid(~Epi_mark)+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))+
+  labs(title = title)+
+  labs(shape='Significance of enrichment \n (Group enrichment, \n permutation test)')+
+  labs(color='Amplicon residual activity')+
+  scale_color_manual(values=c("High" = "#F8766D", 
+                              "Middle" = "#7CAE00", 
+                              "Low" = "#00BFC4"))+
+  guides(
+   shape = guide_legend(order = 2),
+   color = guide_legend(order = 1)
+  )+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+
+```
+
+## 8.5 Intersections across peak q values
+```{r, fig.width = 10, fig.height = 6}
+# Stacked barplot representation
+
+df2 <- df_m
+df2$Fraction_not_intersecting <- 1- df2$Fraction_intersecting
+df2 <- df2[,c("Condition", "Epi_mark", "Fraction_intersecting", "Fraction_not_intersecting",  "Epi_peak_q_value")]
+
+df2_m <- melt(df2, id.vars = c("Condition", "Epi_mark", "Epi_peak_q_value"))
+
+df2_m$Epi_mark <- factor(df2_m$Epi_mark, levels = c("DNase", "H3K4me1", "H3K4me3", "H3K36me3", "H3K9me3", "H3K27me3"))
+df2_m$Condition <- factor(df2_m$Condition, levels = c("Low", "Middle", "High"))
+
+### Stacked barplot - all peak significance levels
+ggplot(df2_m, aes(fill = variable, y=value, x=Condition)) + 
+    geom_bar(position="stack", stat="identity")+
+    theme_bw()+
+    labs(x = "", y = "Fraction of MPRA amplicons with overlapping FB DHS peaks")+
+    theme(legend.title = element_blank())+
+    facet_grid(Epi_peak_q_value ~ Epi_mark, margins = FALSE)+
+    theme(axis.text.x = element_text(angle = 90))
+
+
+```
+
+### 8.5.1 Fig.2C Intersections at q<0.05
+```{r}
+# Only at q < 0.05 roadmap peak
+df3_m <- dplyr::filter(df2_m, Epi_peak_q_value == 0.05) 
+
+df3_m$variable <- ifelse(df3_m$variable == "Fraction_intersecting", "Intersecting", "Non-intersecting")
+
+fill <- c("#b2d183", "#40b8d0")
+  
+Fig_2C <- ggplot(df3_m, aes(fill = variable, y=value, x=Condition)) + 
+    geom_bar(position="stack", stat="identity")+
+    theme_bw()+
+    labs(x = "Amplicon residual activity", 
+         y = "Fraction of MPRA amplicons overlapping \n with epigenomic datasets")+
+    labs(fill = "MPRA amplicon:")+  
+    facet_wrap(~Epi_mark)+
+    scale_fill_manual(values=fill)+
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+    theme(strip.text.x = element_text(size = 14))+
+    theme(legend.position="bottom")
+
+Fig_2C
+
+```
+
+### 8.5.2 Enrichment P values
+
+Significant enrichment stats
+```{r}
+
+knitr::kable(dplyr::filter(df_m, Epi_peak_q_value == 0.05, Significance != "Non-significant")[,c("Condition", "Epi_mark", "Epi_peak_q_value", "Fraction_intersecting", "P_values_sampling", "Significance")])
+
+```
+
