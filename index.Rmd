@@ -1719,3 +1719,39 @@ knitr::kable(dplyr::filter(df_m, Epi_peak_q_value == 0.05, Significance != "Non-
 
 ```
 
+# 9. Values reported in the text
+
+```{r}
+sum(data.all$Maxi_counts > 200)
+
+```
+
+"We generated an MPRA library consisting of `r sum(data.all$Maxi_counts > 200)` candidate human DNA sequences for testing, each ~900 bp in size, to assess functional enhancer activity in vivo in early postnatal mouse brain."
+
+
+```{r}
+min_count = 200
+n_of_genomic_AAV <- sum(rowSums(data.all[,c("L1_DNA_count", "L2_DNA_count", "L3_DNA_count", "L4_DNA_count")]>min_count) >=4)
+
+n_of_genomic_AAV
+```
+
+"We observed strong correlation between amplicon read counts in the pooled previral plasmid library (“Library”) and genomic AAV DNA (“DNA”) collected from each injected P7 brain (Figure 1B), with `r n_of_genomic_AAV` /345 (93%) detected in the pooled previral library with >200 aligned reads present in all four DNA replicates."
+
+
+```{r}
+sum(data.predict$training)
+```
+
+"Then, we used the middle 80% of amplicons (N = `r sum(data.predict$training)`) ranked by RNA/DNA ratio (Supplemental Figure 4B) to build a linear model to account for background MPRA RNA based on amplicon representation and GC content (Supplemental Figure 4C-F)."
+
+
+
+
+# 10. R sessionInfo()
+
+```{r}
+library(pander)
+
+pander(sessionInfo())
+```
