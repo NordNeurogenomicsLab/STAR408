@@ -1095,8 +1095,12 @@ lm_mean <- mean(mod_training_with_GC$residuals)
 data.predict$Residuals_Z_scaled_to_lm <- (data.predict$Residuals_Manual - lm_mean) / lm_sd
 
 # Calculate normal p values
-data.predict$Pvalue <- pnorm(abs(data.predict$Residuals_Z_scaled_to_lm), lower.tail = FALSE)
+data.predict$Pvalue <- pnorm(data.predict$Residuals_Z_scaled_to_lm, lower.tail = FALSE)
 data.predict$FDR <- p.adjust(data.predict$Pvalue, method = "BH")
+
+#sum(data.predict$Pvalue < 0.05)
+#sum(data.predict$Pvalue < 0.05 & data.predict$Residuals_Z_scaled_to_lm > 0)
+#sum(data.predict$Pvalue < 0.05 & data.predict$Residuals_Z_scaled_to_lm < 0)
 
 # Are residuals normally distributed. Graphical approach = PASSED  KC: there was a plot here...
 #write.csv(data.predict, file = "G:/Shared drives/Nord Lab - Computational #Projects/MPRA/STAR408/CSV_output_files/STAR408_data.predict.N321.csv", 
