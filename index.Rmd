@@ -1712,10 +1712,12 @@ Fig_2C
 
 ### 8.5.2 Enrichment P values
 
-Significant enrichment stats
+Enrichment with permutation test at P < 0.01 and peak q value at 0.05
 ```{r}
 
-knitr::kable(dplyr::filter(df_m, Epi_peak_q_value == 0.05, Significance != "Non-significant")[,c("Condition", "Epi_mark", "Epi_peak_q_value", "Fraction_intersecting", "P_values_sampling", "Significance")])
+epi_p_table <- distinct(filter(df_m, P_values_sampling < 0.1, Epi_peak_q_value == 0.05)[,c("Condition", "Epi_mark", "Epi_peak_q_value", "Fraction_intersecting", "P_values_sampling", "Significance")])
+
+knitr::kable(arrange(epi_p_table, Epi_mark))
 
 ```
 
@@ -1745,7 +1747,70 @@ sum(data.predict$training)
 
 "Then, we used the middle 80% of amplicons (N = `r sum(data.predict$training)`) ranked by RNA/DNA ratio (Supplemental Figure 4B) to build a linear model to account for background MPRA RNA based on amplicon representation and GC content (Supplemental Figure 4C-F)."
 
+```{r}
 
+sum(data.predict$Pvalue < 0.05)
+sum(data.predict$FDR < 0.05)
+
+sum(data.predict$Pvalue < 0.05 & data.predict$Residuals_Z_scaled_to_lm > 0)
+sum(data.predict$FDR < 0.05 & data.predict$Residuals_Z_scaled_to_lm > 0)
+
+sum(data.predict$Pvalue < 0.05 & data.predict$Residuals_Z_scaled_to_lm < 0)
+sum(data.predict$FDR < 0.05 & data.predict$Residuals_Z_scaled_to_lm < 0)
+
+```
+
+"We identified `r sum(data.predict$Pvalue < 0.05)` amplicons with significant changes in MPRA RNA compared to input DNA (P < 0.05), including `r sum(data.predict$FDR < 0.05)` amplicons passing a false discovery rate threshold (FDR < 0.05). `r sum(data.predict$Pvalue < 0.05 & data.predict$Residuals_Z_scaled_to_lm > 0)` at P < 0.05 and `r sum(data.predict$FDR < 0.05 & data.predict$Residuals_Z_scaled_to_lm > 0)` at FDR < 0.05 amplicons (12% and 2%) with increased RNA, suggestive of positive transcriptional regulatory activity, i.e. enhancers. 
+`r sum(data.predict$Pvalue < 0.05 & data.predict$Residuals_Z_scaled_to_lm < 0)` at P < 0.05 and `r sum(data.predict$FDR < 0.05 & data.predict$Residuals_Z_scaled_to_lm < 0)` at FDR < 0.05 amplicons had significantly reduced RNA versus expected, representing the set of amplicons that are least likely to have enhancer activity (Figure 2A)."
+
+```{r}
+
+sum(data.predict$MeanRatio > 1.5 & data.predict$MSD > 0)
+
+```
+
+We found that `r sum(data.predict$MeanRatio > 1.5 & data.predict$MSD > 0)` amplicons were considered active using the criteria RNA/DNA ratio > 1.5 including amplicons with mean greater than standard deviation. 
+
+
+```{r}
+
+active_amp_by_lm <- data.predict$Pvalue < 0.05 & data.predict$Residuals_Z_scaled_to_lm > 0
+active_amp_by_ratio <- data.predict$MeanRatio > 1.5
+
+# It's more intuitive to run this on amp names instead of Booleans 
+active_amp_by_lm <- data.predict$Amp_name[active_amp_by_lm]  # 36
+active_amp_by_ratio <- data.predict$Amp_name[active_amp_by_ratio]  #99
+
+setdiff(active_amp_by_lm, active_amp_by_ratio) # "331_GWAS" - is the exception
+#setdiff(active_amp_by_ratio, active_amp_by_lm)
+
+# Let's investigate
+df <- filter(data.predict, Amp_name %in% c(active_amp_by_lm, active_amp_by_ratio))
+filter(df, Amp_name == "331_GWAS")[, c("Amp_name", "MSD", "MeanRatio_MoM", "MeanRatio", "Pvalue", "FDR")]
+# "331_GWAS" has negative MSD
+
+
+# There are actually 35/36 amplicons identified as active using both approaches 
+
+round(35/36, digits = 2)
+```
+
+35 out of 36 amplicons identified using model residuals were also active in the ratiometric comparison.
+
+```{r}
+sum(data.predict$Pvalue < 0.05 & data.predict$Residuals_Z_scaled_to_lm > 0)
+
+sum(data.predict$Pvalue < 0.05 & 
+      data.predict$Residuals_Z_scaled_to_lm > 0 &
+      data.predict$MSD > 1.5)
+
+#data.predict$Amp_name[data.predict$Pvalue < 0.05 & 
+#      data.predict$Residuals_Z_scaled_to_lm > 0 &
+#      data.predict$MSD > 1.5]
+
+```
+
+Among 36 positive amplicons with significant regression residual activity (P < 0.05), 18 (50%) had mean ratio – 1 s.d. > 1.5, representing the amplicons with the strongest MPRA-defined enhancer activity (Figure 2B).
 
 
 # 10. R sessionInfo()
