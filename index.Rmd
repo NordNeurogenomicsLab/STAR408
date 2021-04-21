@@ -1,7 +1,7 @@
 ---
 title: "STAR408 Massively Parallel Reporter Assay"
 subtitle: |
-  | Jason T. Lambert, Linda Su-Feher, Karol Cichewicz, Tracy L. Warren, Iva Zdilar, Yurong Wang, Kenneth J. Lim, Jessica Haigh, Sarah J. Morse, Tyler W. Stradleigh, Erika Castillo, Haghani Viki, Spencer Moss, Hannah Parolini, Diana Quintero, Diwash Shrestha, Daniel Vogt, Leah C. Byrne, Alex S. Nord. 2021: [Parallel functional testing identifies enhancers active in early postnatal mouse brain](https://www.biorxiv.org/content/10.1101/2021.01.15.426772v3) 
+  | Jason T. Lambert, Linda Su-Feher, Karol Cichewicz, Tracy L. Warren, Iva Zdilar, Yurong Wang, Kenneth J. Lim, Jessica Haigh, Sarah J. Morse, Cesar P. Canales, Tyler W. Stradleigh, Erika Castillo, Viktoria Haghani, Spencer Moss, Hannah Parolini, Diana Quintero, Diwash Shrestha, Daniel Vogt, Leah C. Byrne, Alex S. Nord. 2021: [Parallel functional testing identifies enhancers active in early postnatal mouse brain](https://www.biorxiv.org/content/10.1101/2021.01.15.426772v3) 
  
 author: |
   | Data analysis by:
