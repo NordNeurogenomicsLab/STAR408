@@ -1394,8 +1394,8 @@ All amplicons identified using model residuals were also active in the ratiometr
 
 datatable(
   arrange(data.predict, 
-          desc(Residuals_Z_scaled_to_lm))[,c("Amp_name", "Chr", "Start", "End", "MeanRatio", "MeanRatio_sd", "training", "Residuals_Z_scaled_to_lm", "Pvalue")], 
-  rownames = FALSE)
+          desc(Residuals_Z_scaled_to_lm))[,c("Amp_name", "Amp_Full_Name", "Chr", "Start", "End", "MeanRatio", "MeanRatio_sd", "training", "Residuals_Z_scaled_to_lm", "Pvalue")], 
+  rownames = FALSE, options = list(pageLength = 25))
 
 ```
 
