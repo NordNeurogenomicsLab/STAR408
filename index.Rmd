@@ -717,6 +717,12 @@ ggplot(df_clean, aes(x = log2(Maxi_prop), y = GC))+
     + Independently verify GC content data
 
 ```{r, eval=FALSE}
+
+github_dir <- file.path("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408")
+
+setwd(github_dir)
+
+
 # Saving a Supp Table with primers
 primers <- read.csv("In_silico_PCR_STAR408/STAR408_primers.csv", header = TRUE, fill = TRUE)
 
@@ -890,6 +896,88 @@ y$At_least_1_specific_in_sil_prod <- ifelse(y$Amp_name2 %in% x, TRUE, FALSE) #40
 
 # Let's flag amplicons for removal from the training model
 d=data.frame(x1=c(-Inf, -Inf), x2=c(+Inf, -15), y1=c(-Inf,-15), y2=c(-15, +Inf))
+
+```
+
+```{r}
+
+### PCR dropout questions ###
+
+### Check isPCR efficiency for excluded 64 amplicons
+
+dim(filter(y, RNA_prop_mean < 2^-15, DNA_prop_mean < 2^-15))
+
+# Unspecific amplicons length
+
+filter(df_in_silico, UNIQID %in% unspecific_PCR$Var1)[,c("UNIQID", 
+                                                         "Amplicon.Length", 
+                                                         "Chr_GRCh38_pred", 
+                                                         "Amplicon_Start_GRCh38", 
+                                                         "Amplicon_End_GRCh38",
+                                                         "PCR_efficiency")]
+
+unspecific_PCR_prop <- filter(y, Amp_name %in% unspecific_PCR$Var1)[,c("Amp_name", "DNA_prop_mean", "RNA_prop_mean")]
+
+unspecific_PCR_prop$Passing_DNA_prop <- unspecific_PCR_prop$DNA_prop_mean > 2^-15
+unspecific_PCR_prop$Passing_RNA_prop <- unspecific_PCR_prop$RNA_prop_mean > 2^-15
+
+# unspecific_PCR
+## REMOVE 265_ARID1B because effectively duplicate of 252_ARID1B
+filter(y, Amp_name %in% c("265_Control_Arid1b_3", "252_Control_Arid1b_1"))
+
+amp_345 <- filter(y, Maxi_counts > 200 )$Amp_name
+amp_345 <- amp_345[! amp_345 %in% "265_Control_Arid1b_3"]
+
+`%nin%` = Negate(`%in%`)
+
+amp_63 <- y$Amp_name[y$Amp_name %nin% amp_345]
+
+# No differences in GC content
+mean(filter(y, Amp_name %in% amp_345)$GC) # 0.4122029
+median(filter(y, Amp_name %in% amp_345)$GC) # 0.4
+
+mean(filter(y, Amp_name %in% amp_63)$GC) # 0.44
+median(filter(y, Amp_name %in% amp_63)$GC) # 0.43
+
+# What about isPCR efficiency
+
+pce <- filter(df_in_silico, UNIQID %in% amp_345)$PCR_efficiency
+pce_p <- sub("(....).*", "\\1", perl = TRUE, pce)
+pce_p <- as.numeric(gsub("%", "", pce_p))
+
+mean(pce_p)   # 99.29284
+median(pce_p) # 99.5
+
+pce <- filter(df_in_silico, UNIQID %in% amp_63)$PCR_efficiency
+pce_p <- sub("(....).*", "\\1", perl = TRUE, pce)
+pce_p <- na.omit(as.numeric(gsub("%", "", pce_p)))
+
+mean(pce_p)    # 99.48
+median(pce_p)  # 99.7
+
+pico_green <- read.csv("Raw_PicoGreen_PCR_concentrations_structured.csv")
+
+
+# Work zone
+
+y2 <- y 
+y2$Amp_number <- unlist(map(strsplit(y2$Amp_name, split = "_"), 1))
+
+y2 <- merge(y2, pico_green, by.x = "Amp_number", by.y = "MPRA.amplicon")
+
+y2$PCR_dropouts <- ifelse(y2$Maxi_counts < 200, TRUE, FALSE)
+
+ggplot(y2, aes(x = Pico_Green_Concentration_estimate_ng_ul, y = log2(Maxi_prop) , color = PCR_dropouts))+
+  geom_point()+
+  theme_bw()
+
+ggplot(y2, aes(x = Pico_Green_Concentration_estimate_ng_ul))+
+  geom_density()+
+  theme_cowplot()
+
+ggplot(y2, aes(x = log2(Maxi_prop)))+
+  geom_density()+
+  theme_cowplot()
 
 ```
 
@@ -2968,4 +3056,799 @@ Among 41 positive amplicons with significant regression residual activity (P < 0
 library(pander)
 
 pander(sessionInfo())
+```
+
+# Reviews
+
+```{bash, eval=FALSE}
+
+bam-readcount ../References/GRCh38/Homo_sapiens.GRCh38.dna.primary_assembly.fa STARR-High35-L4-cDNA_S81_L006.bam 12:2231631-2231632
+'
+
+# Working test example of a while loop.
+
+while read p; do bam-readcount -b 15 -q 20 -f ../References/GRCh38/Homo_sapiens.GRCh38.dna.primary_assembly.fa STARR-High35-L4-cDNA_S81_L006.bam $p; done < SNV_positions_no_header.bed >> test_out.txt
+
+
+####
+
+for file in *bam; do 
+
+while read p; do 
+ bam-readcount -b 15 -q 20 -f ../References/GRCh38/Homo_sapiens.GRCh38.dna.primary_assembly.fa $file $p >> $(echo $file | sed 's/bam/_allele_counts2.txt/');
+done < SNV_positions_no_header.bed;
+
+done
+
+
+rsync -aP --recursive --compress kcichewicz@barbera.genomecenter.ucdavis.edu:/share/nordlab/users/kcichewicz/STAR408/dedup_bam_dup_rm_w_picard/*ba? ./
+
+
+### GNU parallel ###
+# This works, but failed due to filling up a temp directory. Setting a different temp dir did not solve the problem. I run it in a standard for loop overnight
+
+ls *bam | parallel -j 12 --progress --eta --tmpdir /mnt/disks/data/STAR408 'while read p; do bam-readcount -b 15 -q 20 -f ../References/GRCh38/Homo_sapiens.GRCh38.dna.primary_assembly.fa {} $p >> $(echo {} | sed 's/bam/_allele_counts2.txt/'); done < SNV_positions_no_header.bed'
+
+```
+
+# SNV analysis
+
+Bam files were processed using bam-readcount and the MPRA_v2_file_conversion.Rmd script.
+
+```{r}
+
+setwd("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408/Allele_counts")
+
+Maxiprep <- read.csv("Maxiprep_var.csv")
+
+L1_DNA <- read.csv("L1_DNA_var.csv")
+L2_DNA <- read.csv("L2_DNA_var.csv")
+L3_DNA <- read.csv("L3_DNA_var.csv")
+L4_DNA <- read.csv("L4_DNA_var.csv")
+R1_DNA <- read.csv("R1_DNA_var.csv")
+
+
+L1_RNA <- read.csv("L1_RNA_var.csv")
+L2_RNA <- read.csv("L2_RNA_var.csv")
+L3_RNA <- read.csv("L3_RNA_var.csv")
+L4_RNA <- read.csv("L4_RNA_var.csv")
+R1_RNA <- read.csv("R1_RNA_var.csv")
+L4_High35_RNA <- read.csv("L4_High35_RNA_var.csv")
+
+sel_cols <- c("chr", "position", "SNP_ID", "Group", "Name", "reference_base", "depth", "ref_allele_freq")
+
+
+DNA_RNA_list <- list(Maxiprep[,sel_cols], 
+                 L1_DNA[,sel_cols], 
+                 L2_DNA[,sel_cols], 
+                 L3_DNA[,sel_cols], 
+                 L4_DNA[,sel_cols], 
+                 R1_DNA[,sel_cols],
+                 
+                 L1_RNA[,sel_cols], 
+                 L2_RNA[,sel_cols], 
+                 L3_RNA[,sel_cols], 
+                 L4_RNA[,sel_cols], 
+                 R1_RNA[,sel_cols],
+                 L4_High35_RNA[,sel_cols]
+                 )
+
+DNA_RNA_merged <- Reduce(function(x, y) 
+  merge(x, y, all=FALSE, by=c("chr", "position", "SNP_ID", "Group", "Name", "reference_base")), 
+       DNA_RNA_list, accumulate=F)
+
+
+# dim(DNA_RNA_merged) # 440 variants
+# length(unique(DNA_RNA_merged$Name))  # in 314 unique amplicons 
+
+
+colnames(DNA_RNA_merged) <- c("chr", "position", "SNP_ID", "Group", "Name", "reference_base",
+                          "Maxi_depth", "Maxi_ref_freq",
+                          "L1_DNA_depth", "L1_DNA_ref_freq",
+                          "L2_DNA_depth", "L2_DNA_ref_freq",
+                          "L3_DNA_depth", "L3_DNA_ref_freq",
+                          "L4_DNA_depth", "L4_DNA_ref_freq",
+                          "R1_DNA_depth", "R1_DNA_ref_freq",
+                          
+                          "L1_RNA_depth", "L1_RNA_ref_freq",
+                          "L2_RNA_depth", "L2_RNA_ref_freq",
+                          "L3_RNA_depth", "L3_RNA_ref_freq",
+                          "L4_RNA_depth", "L4_RNA_ref_freq",
+                          
+                          "R1_RNA_depth", "R1_RNA_ref_freq",
+                          "L4_High35_RNA_depth", "L4_High35_RNA_ref_freq"
+                          
+                          )
+
+
+depth_matrix <- DNA_RNA_merged[,grepl("depth", colnames(DNA_RNA_merged))]
+freq_matrix <- DNA_RNA_merged[,grepl("freq", colnames(DNA_RNA_merged))]
+
+```
+
+
+```{r, eval=FALSE}
+
+# Revisit knitting errors
+
+library(GGally)
+library(cowplot)
+
+ggpairs(depth_matrix, 
+        progress = FALSE,
+        lower = list(continuous = wrap("points", size = 0.5, alpha = 0.5, pch = 16), 
+                     combo = "box", discrete = "blank", na = "na"),
+        diag = list(discrete = "blankDiag", continuous = wrap("densityDiag", alpha = 0.4), 
+                    na = "blankDiag"), 
+        upper = list(continuous = wrap('cor', size = 4)))+
+  
+        #labs(title = bquote(gDNA~and~Maxiprep~by~log[2](Proportion))) + 
+        theme_bw()+ 
+        theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+              text = element_text(size = 10), 
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
+
+
+ggpairs(freq_matrix[,c(1:5, 7:10)], 
+        progress = FALSE,
+        lower = list(continuous = wrap("points", size = 0.5, alpha = 0.5, pch = 16), 
+                     combo = "box", discrete = "blank", na = "na"),
+        diag = list(discrete = "blankDiag", continuous = wrap("densityDiag", alpha = 0.4), 
+                    na = "blankDiag"), 
+        upper = list(continuous = wrap('cor', size = 4)))
+  
+        #labs(title = bquote(gDNA~and~Maxiprep~by~log[2](Proportion))) + 
+        theme_bw()+ 
+        theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+              text = element_text(size = 10), 
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
+
+### Allele depth vs amplicon depth
+
+depth_matrix_m <- reshape2::melt(depth_matrix[,1:5])
+
+p1 <- ggplot(depth_matrix_m, aes(x = value, fill = variable))+
+  geom_density(alpha = 0.3)+
+  theme_cowplot()+
+  labs(x = "count", title = "Number of reads covering SNVs")
+
+###
+
+data_complete <- read.csv("../data_complete_408.csv")
+
+data_complete[1:5, 1:10]
+
+DNA_RNA_vs_allele_counts <- merge(DNA_RNA_merged, data_complete[,c("Amp_name", "Chr", "Start", "End", "Maxi_counts", "L1_DNA_count", "L2_DNA_count", "L3_DNA_count", "L4_DNA_count")], 
+      by.x = "Name", by.y = "Amp_name")
+
+
+#
+
+df <- data.frame(
+  "Maxi_allele_vs_all_ratio" = DNA_RNA_vs_allele_counts$Maxi_depth / DNA_RNA_vs_allele_counts$Maxi_counts,
+  "L1_allele_vs_all_ratio" = DNA_RNA_vs_allele_counts$L1_DNA_depth / DNA_RNA_vs_allele_counts$L1_DNA_count,
+  "L2_allele_vs_all_ratio" = DNA_RNA_vs_allele_counts$L2_DNA_depth / DNA_RNA_vs_allele_counts$L2_DNA_count,
+  "L3_allele_vs_all_ratio" = DNA_RNA_vs_allele_counts$L3_DNA_depth / DNA_RNA_vs_allele_counts$L3_DNA_count,
+  "L4_allele_vs_all_ratio" = DNA_RNA_vs_allele_counts$L4_DNA_depth / DNA_RNA_vs_allele_counts$L4_DNA_count
+  )
+
+df_m <- reshape2::melt(df)
+
+p2 <- ggplot(df_m, aes(x = value, fill = variable))+
+  geom_density(alpha = 0.3)+
+  theme_cowplot()+
+  labs(x = "fraction", title = "Fraction of reads covering SNVs")
+
+
+plot_grid(
+  p1, p2,
+  ncol = 1
+)
+
+##### #####
+# Based on 440 SNPs in a dataset. 
+
+SNP_panelA <- ggplot(df_m, aes(x = value))+
+  geom_density(alpha = 0.3)+
+  theme_cowplot()+
+  #geom_vline(xintercept = median(df_m$value), linetype = 2)+
+  labs(x = "Fraction of DNA informative reads", title = "Fraction of MPRA amplicon reads covering SNPs")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+SNP_panelA
+  
+```
+
+```{r}
+# Reference allele Frequencies
+
+dna_freq_m <- reshape2::melt(df[,c("L1_DNA_ref_freq", 
+      "L2_DNA_ref_freq",
+      "L3_DNA_ref_freq",
+      "L4_DNA_ref_freq")])
+
+colnames(dna_freq_m) <- c("Sample", "ref_allele_freq")
+
+dna_depth_m <- reshape2::melt(df[,c("L1_DNA_depth", 
+      "L2_DNA_depth",
+      "L3_DNA_depth",
+      "L4_DNA_depth")])
+
+colnames(dna_depth_m) <- c("Sample", "DNA_depth")
+
+dna_depth_m$above_500 <- ifelse(dna_depth_m$DNA_depth > 500, TRUE, FALSE)
+
+dna_freq_depth_m <- data.frame(dna_freq_m, "DNA_depth" = dna_depth_m$DNA_depth, "Above_500_counts" = dna_depth_m$above_500)
+
+ggplot(dna_freq_depth_m, aes(x = ref_allele_freq))+
+  geom_histogram(bins = 20)+
+  theme_cowplot()
+
+ggplot(dna_freq_depth_m, aes(x =  Sample, y = ref_allele_freq))+
+  geom_violin()+
+  geom_jitter(aes(color = Above_500_counts), alpha = 0.5)+
+  theme_cowplot()
+  
+# How many allele calls is above 95% reference
+sum(df$Maxi_ref_freq > 0.95) / length(df$Maxi_ref_freq)
+
+
+```
+
+
+
+```{r}
+# Approach from an R21: G:\Shared drives\Nord Lab - Data\SFRI00\ASD1000\ASD1KV5\Karol\V4_vs_V5_analysis_draft_w_R21_plots.Rmd
+
+# 440 SNVs
+# 314 MPRA amplicons
+
+df <- DNA_RNA_merged
+
+padding = 0.001 # Deals with dividing by 0 or very low values.
+
+allele_dif <- data.frame(
+           "Name" = df$Name,
+           "SNP_ID" = df$SNP_ID,
+           "L1_allele_dif" = ((df$L1_RNA_ref_freq - df$L1_DNA_ref_freq) + padding) / (df$L1_DNA_ref_freq + padding),
+           "L2_allele_dif" = ((df$L2_RNA_ref_freq - df$L2_DNA_ref_freq) + padding) / (df$L2_DNA_ref_freq + padding),
+           "L3_allele_dif" = ((df$L3_RNA_ref_freq - df$L3_DNA_ref_freq) + padding) / (df$L3_DNA_ref_freq + padding),
+           "L4_allele_dif" = ((df$L4_RNA_ref_freq - df$L4_DNA_ref_freq) + padding) / (df$L4_DNA_ref_freq + padding),
+           "L1_DNA_allele_depth" = df$L1_DNA_depth,
+           "L2_DNA_allele_depth" = df$L2_DNA_depth,
+           "L3_DNA_allele_depth" = df$L3_DNA_depth,
+           "L4_DNA_allele_depth" = df$L4_DNA_depth,
+           "L1_RNA_allele_depth" = df$L1_RNA_depth,
+           "L2_RNA_allele_depth" = df$L2_RNA_depth,
+           "L3_RNA_allele_depth" = df$L3_RNA_depth,
+           "L4_RNA_allele_depth" = df$L4_RNA_depth
+           )
+
+# Example sanity check
+
+data.frame(df$L1_DNA_ref_freq, df$L1_RNA_ref_freq, allele_dif$L1_allele_dif)
+
+
+allele_dif_mean <- data.frame(
+                    "Name" = df$Name,
+                    "SNP_ID" = df$SNP_ID,
+                    "mean_allele_dif" = rowMeans(allele_dif[,3:6]),
+                    "mean_DNA_depth" = rowMeans(allele_dif[,7:10]),
+                    "mean_RNA_depth" = rowMeans(allele_dif[,11:14]),
+                    "mean_DNA_ref_allele_freq" = rowMeans(df[,c("L1_DNA_ref_freq", 
+                                                       "L2_DNA_ref_freq",
+                                                       "L3_DNA_ref_freq",
+                                                       "L4_DNA_ref_freq")]),
+                    "SD_DNA_ref_allele_freq" = apply(df[,c("L1_DNA_ref_freq", 
+                                                       "L2_DNA_ref_freq",
+                                                       "L3_DNA_ref_freq",
+                                                       "L4_DNA_ref_freq")], 1, function(x) sd(x)),
+                    "mean_RNA_ref_allele_freq" = rowMeans(df[,c("L1_RNA_ref_freq", 
+                                                       "L2_RNA_ref_freq",
+                                                       "L3_RNA_ref_freq",
+                                                       "L4_RNA_ref_freq")]),
+                    "SD_RNA_ref_allele_freq" = apply(df[,c("L1_RNA_ref_freq", 
+                                                       "L2_RNA_ref_freq",
+                                                       "L3_RNA_ref_freq",
+                                                       "L4_RNA_ref_freq")], 1, function(x) sd(x))
+                              )
+
+### A density plot of ref allele freq ###
+allele_ref_freq <- reshape2::melt(df[,c("Maxi_ref_freq",
+                                     "L1_DNA_ref_freq",
+                                     "L2_DNA_ref_freq",
+                                     "L3_DNA_ref_freq",
+                                     "L4_DNA_ref_freq",
+                                     "L1_RNA_ref_freq",
+                                     "L2_RNA_ref_freq",
+                                     "L3_RNA_ref_freq",
+                                     "L4_RNA_ref_freq")])
+
+raw_ref_allele_freq_plot <- ggplot(allele_ref_freq, aes(x = value, color = variable))+
+  geom_density()+
+  theme_cowplot()+
+  labs(x =" Reference allele frequency", 
+       title = "Most of the SNVs have reference allele frequency close to 1 (all 440 SNVs)")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+raw_ref_allele_freq_plot
+
+### A density plot of allele differences ###
+
+allele_dif_m <- reshape2::melt(allele_dif[,3:6])
+
+raw_ref_allele_dif_plot <- ggplot(allele_dif_m, aes(x = value, color = variable))+
+  geom_density()+
+  theme_cowplot()+
+  labs(x ="Reference RNA/DNA allele change [%]", 
+       title = "Almost all of the SNVs have reference allele change close to 0 (all 440 SNVs)")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  coord_cartesian(xlim = c(-1,1))
+
+raw_ref_allele_dif_plot
+
+
+# Conclusion: The vast majority of SNVs have no allelic differences and reference allele frequency close to 1.
+```
+
+
+```{r}
+# Let's curate SNVs to those that may be changing its frequency from DNA to RNA 
+# Lets remove SNV positions that are not variable
+
+# To do: There are too many summary dataframes. Merge them
+
+
+#allele_dif_mean
+df_comprehensive <- merge(df, allele_dif_mean)
+
+#  Keep only GWAS and LD SNPs
+
+ascertainment_group <- ifelse(grepl("SCN1A|CACNA1C", df_comprehensive$Name), "LD", df_comprehensive$Name)
+ascertainment_group <- ifelse(grepl("SZ108|Epilepsy", ascertainment_group), "GWAS", ascertainment_group)
+ascertainment_group <- ifelse(grepl("NCASD", ascertainment_group), "FBDHS", ascertainment_group)
+ascertainment_group <- ifelse(grepl("Control", ascertainment_group), "PutEnh", ascertainment_group)
+
+df_comprehensive$ascertainment_group <- ascertainment_group
+
+# Filter on max ref allele freq
+df_comprehensive_filtered <- dplyr::filter(df_comprehensive, mean_DNA_ref_allele_freq < 0.95, 
+                                           ascertainment_group %in% c("LD", "GWAS"))
+
+# Filter on min DNA count. At least 500 counts in every sample seems reasonable. 
+DNA_count_matrix <- df_comprehensive_filtered[,c("L1_DNA_depth",
+                    "L2_DNA_depth",
+                    "L3_DNA_depth",
+                    "L4_DNA_depth")]
+
+DNA_count_matrix$over_500_in_each_sample <- rowSums(ifelse(as.matrix(DNA_count_matrix > 500), 1, 0)) == 4
+
+df_comprehensive_filtered <- df_comprehensive_filtered[DNA_count_matrix$over_500_in_each_sample,]
+
+
+# Filtering criteria
+# 1. mean_DNA_ref_allele_freq < 0.95
+# 2. at least 500 DNA counts in each sample
+# 3. in LD and GWAS amplicons
+# Result = 138 SNVs in 81 amplicons
+
+### A density plot of ref allele freq ###
+allele_ref_freq_filtered <- reshape2::melt(df_comprehensive_filtered[,c("Maxi_ref_freq",
+                                     "L1_DNA_ref_freq",
+                                     "L2_DNA_ref_freq",
+                                     "L3_DNA_ref_freq",
+                                     "L4_DNA_ref_freq",
+                                     "L1_RNA_ref_freq",
+                                     "L2_RNA_ref_freq",
+                                     "L3_RNA_ref_freq",
+                                     "L4_RNA_ref_freq")])
+
+allele_ref_freq_filtered$Nucleic_acid <- ifelse(grepl("Maxi", allele_ref_freq_filtered$variable), 
+                                                "Maxiprep", "")
+
+allele_ref_freq_filtered$Nucleic_acid <- ifelse(grepl("DNA", allele_ref_freq_filtered$variable), 
+                                                "DNA", allele_ref_freq_filtered$Nucleic_acid)
+
+allele_ref_freq_filtered$Nucleic_acid <- ifelse(grepl("RNA", allele_ref_freq_filtered$variable), 
+                                                "RNA", allele_ref_freq_filtered$Nucleic_acid)
+
+
+ref_allele_freq_plot_filtered <- ggplot(allele_ref_freq_filtered, aes(x = value, color = Nucleic_acid))+
+  geom_density()+
+  theme_cowplot()+
+  labs(x =" Reference allele frequency", 
+       title = "Reference allele frequency of most SNVs is close to 1 \n (QC filtered 139 SNVs, in 82 MPRA amplicons)")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(legend.position="bottom")
+
+ref_allele_freq_plot_filtered
+
+####
+
+
+allele_dif_m <- reshape2::melt(filter(allele_dif, SNP_ID %in% df_comprehensive_filtered$SNP_ID)[,3:6])
+
+ref_allele_dif_plot <- ggplot(allele_dif_m, aes(x = value, color = variable))+
+  geom_density()+
+  theme_cowplot()+
+  labs(x ="Reference RNA/DNA allele change [%]", 
+       title = "Reference allele change from DNA to RNA is close to 0 \n (QC filtered 138 SNVs, in 81 MPRA amplicons)")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  coord_cartesian(xlim = c(-1,2))+
+  theme(legend.position="bottom")
+ 
+ref_allele_dif_plot
+
+
+plot_grid(ref_allele_freq_plot_filtered, ref_allele_dif_plot)
+
+```
+
+
+
+
+```{r}
+
+library(ggrepel)
+
+# Filter amplicons passing count and amplicon library proportion quality thresholds
+
+data_predict <- read.csv("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408/data_predict_308.csv")
+
+# Amplicon names are inconsistent. I'm going to simplify their names to numbers which are consistent in both naming conventions that evolved during this analysis.
+
+df_comprehensive_filtered$Allele_number <- unlist(map(strsplit(df_comprehensive_filtered$Name, split = "_"), 1))
+data_predict$Allele_number <- unlist(map(strsplit(data_predict$Amp_name, split = "_"), 1))
+
+SNV_and_lm <- merge(df_comprehensive_filtered, data_predict[,c("Allele_number", "Amp_name", "Residuals_Z_scaled_to_lm", "Pvalue")], by = "Allele_number") 
+
+# After merging with the post QC 308 MPRA amplicons 
+# dim(SNV_and_lm)  There are 161 unique SNVs, down from 168
+# and 89 unique MPRA amplicons
+# nrow(filter(SNV_and_lm, Pvalue < 0.05))    # 16 SNVs in significantly active amplicons
+
+
+SNV_and_lm$Sig_MPRA_act <- SNV_and_lm$Pvalue < 0.05
+SNV_and_lm$label <- paste0(SNV_and_lm$Name, ":", SNV_and_lm$SNP_ID)
+
+```
+
+```{r}
+# Plot allelic change vs DNA and RNA depth
+
+# Take care of outliers
+
+outliers <- SNV_and_lm[SNV_and_lm$mean_allele_dif > 2, ]
+
+# Let's just cap the outlier values for now
+
+SNV_and_lm$mean_allele_dif <- ifelse(SNV_and_lm$mean_allele_dif > 2, 2, SNV_and_lm$mean_allele_dif)
+
+
+
+p1 <- ggplot(SNV_and_lm, aes(x = mean_DNA_depth, 
+                       y = mean_allele_dif, 
+                       color = Sig_MPRA_act))+
+  geom_hline(yintercept = 2, linetype = 2)+
+  geom_point(alpha = 0.5)+
+
+  theme_cowplot()+
+  labs(x = "Mean allele DNA depth [counts]", 
+       y = "Mean reference RNA/DNA allele change [%]")+
+  geom_hline(yintercept = 0.001)+                      
+  scale_color_manual(values = c("black", "red"))+
+  geom_text_repel(label = ifelse(SNV_and_lm$Sig_MPRA_act & (SNV_and_lm$mean_allele_dif > 0.1 | SNV_and_lm$mean_allele_dif < -0.1), SNV_and_lm$label, ""))+
+  theme(legend.position="bottom")
+
+
+
+
+p2 <- ggplot(SNV_and_lm, aes(x = mean_RNA_depth, y = mean_allele_dif, 
+                       color = Sig_MPRA_act))+
+  geom_point(alpha = 0.5)+
+  theme_cowplot()+
+  labs(x = "Mean allele RNA depth [counts]", y = "Mean reference RNA/DNA allele change [%]")+
+  geom_hline(yintercept = 0.001)+     # distribution centered at the value of data padding 
+  scale_color_manual(values = c("black", "red"))+
+  geom_text_repel(label = ifelse(SNV_and_lm$Sig_MPRA_act & (SNV_and_lm$mean_allele_dif > 0.1 | SNV_and_lm$mean_allele_dif < -0.1), SNV_and_lm$label, ""))+
+  theme(legend.position="bottom")
+
+
+
+plot_grid(p1, p2)
+
+####
+# CACNA1C
+
+```
+
+```{r}
+
+### Frequencies ###
+
+# freq_matrix_filtered <- dplyr::filter(DNA_RNA_merged, SNP_ID %in% SNV_and_lm$SNP_ID)[,grepl("freq", colnames(DNA_RNA_merged))]
+
+freq_matrix_filtered <- DNA_RNA_merged[,grepl("freq", colnames(DNA_RNA_merged))]
+freq_matrix_filtered <- freq_matrix_filtered[,c(1:5, 7:10)]
+colnames(freq_matrix_filtered) <- c("Maxiprep", "L1_DNA", "L2_DNA", "L3_DNA", "L4_DNA", "L1_RNA", "L2_RNA", "L3_RNA", "L4_RNA")
+
+SNP_panelB <- ggpairs(freq_matrix_filtered, 
+        progress = FALSE,
+        lower = list(continuous = wrap("points", size = 0.5, alpha = 0.5, pch = 16), 
+                     combo = "box", discrete = "blank", na = "na"),
+        diag = list(discrete = "blankDiag", continuous = wrap("densityDiag", alpha = 0.4), 
+                    na = "blankDiag"), 
+        upper = list(continuous = wrap('cor', size = 4)))+
+  
+        #labs(title = bquote(gDNA~and~Maxiprep~by~log[2](Proportion))) + 
+        theme_bw()+ 
+        theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+              text = element_text(size = 14), 
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
+
+SNP_panelB
+
+
+### Depth ###
+
+depth_matrix_filtered <- dplyr::filter(DNA_RNA_merged, SNP_ID %in% SNV_and_lm$SNP_ID)[,grepl("depth", colnames(DNA_RNA_merged))]
+
+ggpairs(depth_matrix_filtered[,c(1:5, 7:10)], 
+        progress = FALSE,
+        lower = list(continuous = wrap("points", size = 0.5, alpha = 0.5, pch = 16), 
+                     combo = "box", discrete = "blank", na = "na"),
+        diag = list(discrete = "blankDiag", continuous = wrap("densityDiag", alpha = 0.4), 
+                    na = "blankDiag"), 
+        upper = list(continuous = wrap('cor', size = 4)))+
+  
+        #labs(title = bquote(gDNA~and~Maxiprep~by~log[2](Proportion))) + 
+        theme_bw()+ 
+        theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+              text = element_text(size = 10), 
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
+
+### 
+
+```
+
+
+```{r}
+
+# Barplot of individual allele differences
+
+dim(SNV_and_lm)  # 137 because of mearging with 308 MPRA amplicons
+dim(df_comprehensive_filtered) # 139 
+
+dim(merge(SNV_and_lm, df_comprehensive_filtered))
+
+
+allele_dif_short <- filter(allele_dif, SNP_ID %in% SNV_and_lm$SNP_ID)
+
+allele_dif_short$L1_allele_dif <- ifelse(allele_dif_short$L1_allele_dif > 2, 2, allele_dif_short$L1_allele_dif)
+allele_dif_short$L2_allele_dif <- ifelse(allele_dif_short$L2_allele_dif > 2, 2, allele_dif_short$L2_allele_dif)
+allele_dif_short$L3_allele_dif <- ifelse(allele_dif_short$L3_allele_dif > 2, 2, allele_dif_short$L3_allele_dif)
+allele_dif_short$L4_allele_dif <- ifelse(allele_dif_short$L4_allele_dif > 2, 2, allele_dif_short$L4_allele_dif)
+
+
+df_barplot <- data.frame("Name" = allele_dif_short$Name,
+                         "SNP_ID" = allele_dif_short$SNP_ID,
+                         "Name_SNP_ID" = paste0(allele_dif_short$Name, ":", allele_dif_short$SNP_ID),
+                          allele_dif_short[,c("L1_allele_dif","L2_allele_dif","L3_allele_dif","L4_allele_dif")])
+
+df_barplot$mean_allele_dif <- rowMeans(df_barplot[,c(4:7)])
+
+df_barplot <- merge(df_barplot, SNV_and_lm[,c("SNP_ID","Sig_MPRA_act")])
+
+# Order
+df_barplot <- df_barplot[order(df_barplot$mean_allele_dif, decreasing = F),]
+df_barplot$Name_SNP_ID <- factor(df_barplot$Name_SNP_ID, levels = df_barplot$Name_SNP_ID)
+
+
+
+# Melt
+df_barplot_m <- reshape2::melt(df_barplot[,c("Name_SNP_ID", "L1_allele_dif", "L2_allele_dif", "L3_allele_dif", "L4_allele_dif")], id.vars = "Name_SNP_ID")
+
+
+# Plot
+SNP_panelC <- ggplot() + 
+  geom_bar(data = df_barplot, 
+           aes(x = Name_SNP_ID, y = mean_allele_dif, fill = Sig_MPRA_act), 
+           stat = "identity", alpha = 0.5, width = 0.75)+
+  geom_line(data = df_barplot_m, 
+            aes(x = Name_SNP_ID, y = value, group = Name_SNP_ID), 
+            size = 0.25, alpha = 0.5, color = "black") + 
+  geom_point(data = df_barplot_m,
+             aes(x = Name_SNP_ID, y = value), 
+             size = 0.5, alpha = 0.75, color = "black", shape = 16)+
+  theme_cowplot()+
+  labs(x = "SNP", y = "Reference RNA/DNA allele change [%]", title = "Mean reference RNA/DNA allele change")+
+  scale_fill_manual(values = c("grey", "red"))+
+  theme(text = element_text(size = 12), 
+                     plot.title = element_text(size = 14, hjust = 0.5), 
+                     axis.text.x = element_blank(), 
+                     axis.ticks.x = element_blank(), 
+                     # panel.background = element_rect(fill = "white"), 
+                     panel.grid.major.x = element_blank(),
+                     panel.grid.minor = element_blank())+
+  theme(legend.position = "bottom")+
+  labs(fill='Active MPRA amplicon:') 
+
+SNP_panelC
+
+
+####
+
+# Plot
+SNP_panelC2 <- ggplot() + 
+  geom_bar(data = df_barplot, 
+           aes(x = Name_SNP_ID, y = mean_allele_dif, fill = Sig_MPRA_act), 
+           stat = "identity", alpha = 0.5, width = 0.75)+
+  geom_line(data = df_barplot_m, 
+            aes(x = Name_SNP_ID, y = value, group = Name_SNP_ID), 
+            size = 0.25, alpha = 0.5, color = "black") + 
+  theme_cowplot()+
+  labs(x = "SNP", y = "Reference RNA/DNA allele change [%]", title = "Mean reference RNA/DNA allele change")+
+  scale_fill_manual(values = c("grey", "red"))+
+  theme(text = element_text(size = 12), 
+                     plot.title = element_text(size = 14, hjust = 0.5), 
+                     axis.text.x = element_blank(), 
+                     axis.ticks.x = element_blank(), 
+                     # panel.background = element_rect(fill = "white"), 
+                     panel.grid.major.x = element_blank(),
+                     panel.grid.minor = element_blank())+
+  theme(legend.position = "bottom")+
+  labs(fill='Active MPRA amplicon:') 
+
+SNP_panelC2
+
+
+
+
+# Conclusions:   
+# Draw density plots of ref allele freq, or Major allele freq to demonstrate the lack of stat power due to freq far from 0.5. Then talk about minimal differences in CACNA1c3 and its stats and variability. 
+                
+
+```
+
+
+```{r}
+
+df_barplot <- data.frame("Name" = allele_dif_short$Name,
+                         "SNP_ID" = allele_dif_short$SNP_ID,
+                         "Name_SNP_ID" = paste0(allele_dif_short$Name, ":", allele_dif_short$SNP_ID),
+                          allele_dif_short[,c("L1_allele_dif","L2_allele_dif","L3_allele_dif","L4_allele_dif")])
+
+df_barplot$mean_allele_dif <- rowMeans(df_barplot[,c(4:7)])
+
+df_barplot <- merge(df_barplot, SNV_and_lm[,c("SNP_ID","Sig_MPRA_act")])
+
+df_barplot <- filter(df_barplot, Sig_MPRA_act == TRUE)
+
+# Order
+df_barplot <- df_barplot[order(df_barplot$mean_allele_dif, decreasing = F),]
+df_barplot$Name_SNP_ID <- factor(df_barplot$Name_SNP_ID, levels = df_barplot$Name_SNP_ID)
+
+
+
+# Melt
+df_barplot_m <- reshape2::melt(df_barplot[,c("Name_SNP_ID", "L1_allele_dif", "L2_allele_dif", "L3_allele_dif", "L4_allele_dif")], id.vars = "Name_SNP_ID")
+
+
+# Plot
+SNP_panelD <- ggplot() + 
+  geom_bar(data = df_barplot, 
+           aes(x = Name_SNP_ID, y = mean_allele_dif, fill = Sig_MPRA_act), 
+           stat = "identity", alpha = 0.5, width = 0.75)+
+  geom_line(data = df_barplot_m, 
+            aes(x = Name_SNP_ID, y = value, group = Name_SNP_ID), 
+            size = 0.25, alpha = 0.5, color = "black") + 
+  geom_jitter(data = df_barplot_m,
+             aes(x = Name_SNP_ID, y = value), 
+             size = 2, alpha = 0.5, color = "black")+
+  theme_cowplot()+
+  labs(x = "", 
+       y = "Reference RNA/DNA allele change [%]", 
+       title = "Mean reference RNA/DNA allele change \n of 9 active amplicons")+
+  scale_fill_manual(values = c("grey", "red"))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  theme(legend.position = "none")+
+  theme(text = element_text(size = 12), 
+                     plot.title = element_text(size = 14, hjust = 0.5))
+
+
+SNP_panelD
+```
+
+
+# keep only GWAS and LD ammplicons in the barplot, use the sum rather than the mean. 
+# Refined allele looking for an outlier replicate.
+
+
+```{r}
+# Alternative mean calculation
+
+# 440 SNVs
+# 314 MPRA amplicons
+
+df <- DNA_RNA_merged
+
+padding = 0.001 # Deals with dividing by 0 or very low values.
+
+
+RNA_freq <- rowMeans(data.frame(df$L1_RNA_ref_freq, df$L2_RNA_ref_freq, df$L3_RNA_ref_freq, df$L4_RNA_ref_freq)) 
+DNA_freq <- rowMeans(data.frame(df$L1_DNA_ref_freq, df$L2_DNA_ref_freq, df$L3_DNA_ref_freq, df$L4_DNA_ref_freq))
+RNA_depth <- rowMeans(data.frame(df$L1_RNA_depth, df$L2_RNA_depth, df$L3_RNA_depth, df$L4_RNA_depth))
+DNA_depth <- rowMeans(data.frame(df$L1_DNA_depth, df$L2_DNA_depth, df$L3_DNA_depth, df$L4_DNA_depth))
+
+allele_dif2 <- data.frame(
+           "Name" = df$Name,
+           "SNP_ID" = df$SNP_ID,
+           "Mean_allele_dif" = ((RNA_freq - DNA_freq) + padding) /  (DNA_freq + padding),
+           "Mean_DNA_depth" = DNA_depth,
+           "Mean_RNA_depth" = RNA_depth)
+
+
+
+# Keep only the informative GWAS and LD alleles
+allele_dif2$label <- paste0(allele_dif2$Name, ":", allele_dif2$SNP_ID)
+allele_dif2 <- filter(allele_dif2, label %in% SNV_and_lm$label)
+allele_dif2 <- merge(allele_dif2, SNV_and_lm[,c("label", "Sig_MPRA_act")], by = "label")
+
+
+ggplot(allele_dif2, aes(x = Mean_DNA_depth, y = Mean_allele_dif, color = Sig_MPRA_act))+
+  geom_point(alpha = 0.5)+
+  theme_cowplot()+
+  labs(x = "Mean allele DNA depth [counts]", 
+       y = "Mean reference RNA/DNA allele change [%]")+
+  geom_hline(yintercept = 0.001)+
+  scale_color_manual(values = c("black", "red"))+
+  geom_text_repel(label = ifelse(allele_dif2$Sig_MPRA_act, allele_dif2$label, ""), box.padding = 0.5, max.overlaps = Inf)+
+  theme(legend.position="bottom")+
+  labs(fill='Active MPRA amplicon:')
+
+
+
+SNP_panelE <- ggplot(allele_dif2, aes(x = Mean_RNA_depth, y = Mean_allele_dif, color = Sig_MPRA_act))+
+  geom_point(alpha = 0.5)+
+  theme_cowplot()+
+  labs(x = "Mean allele RNA depth [counts]", 
+       y = "Mean reference RNA/DNA allele change [%]",
+       title =" SNP RNA sequencing depth \n vs RNA/DNA allele change")+
+  geom_hline(yintercept = 0.001)+
+  scale_color_manual(values = c("grey50", "red"))+
+  geom_text_repel(label = ifelse(allele_dif2$Sig_MPRA_act, allele_dif2$label, ""), 
+                  box.padding = 0.5, max.overlaps = Inf)+
+  theme(legend.position="bottom")+
+  labs(color ='Active MPRA amplicon:')+
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+```{r}
+library(grid)
+library(gridExtra)
+
+SNP_panelA
+SNP_panelB
+SNP_panelC
+SNP_panelD
+SNP_panelE
+
+
+```
+
+
+```{r}
+
+# B -  curate the set for high and low allele freq, apply aggressive depth 
+# C - try absolute change = subtract allele freq and plot that. cap at +/- 0.1 allele freq.
+# Drop C and E ?
+
+
+
+
 ```
