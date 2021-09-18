@@ -1,0 +1,401 @@
+---
+title: "MPRA"
+author: "Karol Cichewicz"
+date: "10/25/2019"y
+output: html_document
+---
+test
+```{r}
+setwd("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408/Allele_counts")
+
+# https://github.com/genome/bam-readcount
+
+# Reading bam file count files
+
+#puts the data in a 150 column df necessary to store some rare insertions/deletions.
+#check for each file if the number of columns is sufficient for the dataset by verifying if the df is properly formatted. Check if the chrom numbers contain only expected number. I assume 150 should be sufficient for most files, but if formatting problems arrise increase may be necessary. I should probably find a better method to read this data in... 
+
+
+library(dplyr)
+
+SNV_df_processing_function <- function(txt_file){
+
+g1 <- read.table(file = txt_file, 
+                  fill = TRUE, 
+                  col.names=paste("V", 1:150, sep=""))
+#dim(g1)
+
+#removes columns containing NAs only
+g1 <- g1[, apply(g1, 2, function(x) !all(is.na(x)))]
+
+#dim(g1)
+
+#removes columns which should not be split 
+g1_red <- g1[,c(6:ncol(g1))]
+
+#function splitting and renaming the data frame
+splitting <- function(df, cols) {
+  #df <- g1_red
+  #cols <- "V11"
+  
+  #Introduces NAs to preserve df dimentions for cbinding 
+  df[df==""]  <- "NA"
+  
+  df_A <- data.frame(do.call(rbind, strsplit(as.character(df[, cols]), split = ":", fixed = FALSE)))
+  
+  #head(df_A)
+  #dim(df_A)
+  #unique(df_A$X1)
+  
+  allele_identifier <- ifelse(as.character(df_A[1,1]) %in% c("A", "T", "C", "G", "N"), as.character(df_A[1,1]), "Indel")
+  
+  colnames(df_A) <- c(paste0(allele_identifier,"_", "base"), 
+                  paste0("count", "_", allele_identifier),
+                  paste0("avg_mapping_quality", "_", allele_identifier),
+                  paste0("avg_basequality", "_", allele_identifier),
+                  paste0("avg_se_mapping_quality", "_", allele_identifier),
+                  paste0("num_plus_strand", "_", allele_identifier),
+                  paste0("num_minus_strand", "_", allele_identifier),
+                  paste0("avg_pos_as_fraction", "_", allele_identifier),
+                  paste0("avg_num_mismatches_as_fraction", "_", allele_identifier),
+                  paste0("avg_sum_mismatch_qualities", "_", allele_identifier),
+                  paste0("num_q2_containing_reads", "_", allele_identifier),
+                  paste0("avg_distance_to_q2_start_in_q2_reads", "_", allele_identifier),
+                  paste0("avg_clipped_length", "_", allele_identifier),
+                  paste0("avg_distance_to_effective_3p_end", "_", allele_identifier))
+  
+  d <- cbind(g1[,1:4], df_A)
+  d
+}
+
+#Splitting strings and putting them into a list
+g1_red_split_list <- lapply(colnames(g1_red), function(x) splitting(g1_red, x))
+
+#This doesn't work for the full list because it exceeds the memory limit in my computer. Linda suggested appending unique colnames 
+#g1_split_merged <- Reduce(function(x, y) merge(x, y, all=T, 
+#                                by=c("V1", "V2", "V3", "V4")), g1_red_split_list_red, accumulate=F)
+
+#Limiting the analysis to SNVs only - solves the memory issue
+g1_red_split_list_SNVs <- list(g1_red_split_list[[1]], g1_red_split_list[[2]], g1_red_split_list[[3]], g1_red_split_list[[4]])
+
+#Merging SNV allelic info
+g1_split_merged_SNVs <- Reduce(function(x, y) merge(x, y, all=F, 
+                                by=c("V1", "V2", "V3", "V4")), g1_red_split_list_SNVs, accumulate=F)
+
+
+colnames(g1_split_merged_SNVs) <- c("chr",	"position", "reference_base", "depth", colnames(g1_split_merged_SNVs)[5:length(g1_split_merged_SNVs)])
+
+g1_split_merged_SNVs <- distinct(g1_split_merged_SNVs)
+
+g1_split_merged_SNVs
+
+}
+
+
+# Maxiprep
+Maxiprep <- SNV_df_processing_function("STARR-Maxiprep_S80_L006._allele_counts2.txt")
+
+# DNA
+L1_DNA <- SNV_df_processing_function("STARR-L1-gDNA_S70_L006._allele_counts2.txt")
+L2_DNA <- SNV_df_processing_function("STARR-L2-gDNA_S71_L006._allele_counts2.txt")
+L3_DNA <- SNV_df_processing_function("STARR-L3-gDNA_S72_L006._allele_counts2.txt")
+L4_DNA <- SNV_df_processing_function("STARR-L4-gDNA_S73_L006._allele_counts2.txt")
+R1_DNA <- SNV_df_processing_function("STARR-R1-gDNA_S74_L006._allele_counts2.txt")
+
+
+# RNA
+L1_RNA <- SNV_df_processing_function("STARR-OldL1-cDNA_S75_L006._allele_counts2.txt")
+L2_RNA <- SNV_df_processing_function("STARR-OldL2-cDNA_S76_L006._allele_counts2.txt")
+L3_RNA <- SNV_df_processing_function("STARR-OldL3-cDNA_S77_L006._allele_counts2.txt")
+L4_RNA <- SNV_df_processing_function("STARR-NewL4-cDNA_S78_L006._allele_counts2.txt")
+R1_RNA <- SNV_df_processing_function("STARR-OldR1-cDNA_S79_L006._allele_counts2.txt")
+L4_High35_RNA <- SNV_df_processing_function("STARR-High35-L4-cDNA_S81_L006._allele_counts2.txt")
+
+
+#
+#Let's filter only reliable bases/reads
+
+#avg_mapping_quality → the mean mapping quality of reads containing the base
+#avg_basequality → the mean base quality for these reads
+    #Is this an average quality of a base (A, T, C or G) at the position??
+
+```
+
+
+```{r}
+variant_processing <- function(split_variant_stats, base_qual, min_allele_freq){
+
+sample <- split_variant_stats
+# sample <- Maxiprep
+
+# base_qual <- 0
+# min_allele_freq <- 0.005
+
+sample$avg_mapping_quality_A <- as.numeric(as.character(sample$avg_mapping_quality_A))
+sample$avg_mapping_quality_T <- as.numeric(as.character(sample$avg_mapping_quality_T))
+sample$avg_mapping_quality_C <- as.numeric(as.character(sample$avg_mapping_quality_C))
+sample$avg_mapping_quality_G <- as.numeric(as.character(sample$avg_mapping_quality_G))
+
+sample$avg_basequality_A <- as.numeric(as.character(sample$avg_basequality_A))
+sample$avg_basequality_T <- as.numeric(as.character(sample$avg_basequality_T))
+sample$avg_basequality_C <- as.numeric(as.character(sample$avg_basequality_C))
+sample$avg_basequality_G <- as.numeric(as.character(sample$avg_basequality_G))
+
+
+#Hosekeeping ensuring correct filtering
+sample$avg_mapping_quality_A <- as.numeric(as.character(sample$avg_mapping_quality_A))
+sample$avg_mapping_quality_T <- as.numeric(as.character(sample$avg_mapping_quality_T))
+sample$avg_mapping_quality_C <- as.numeric(as.character(sample$avg_mapping_quality_C))
+sample$avg_mapping_quality_G <- as.numeric(as.character(sample$avg_mapping_quality_G))
+
+sample$avg_basequality_A <- as.numeric(as.character(sample$avg_basequality_A))
+sample$avg_basequality_T <- as.numeric(as.character(sample$avg_basequality_T))
+sample$avg_basequality_C <- as.numeric(as.character(sample$avg_basequality_C))
+sample$avg_basequality_G <- as.numeric(as.character(sample$avg_basequality_G))
+
+
+#This parameter takes values of either 0 or 255
+sample_filtered <- filter(sample, avg_mapping_quality_A > 0 |
+                            avg_mapping_quality_T > 0 |
+                            avg_mapping_quality_C > 0 |
+                            avg_mapping_quality_G > 0 )
+
+sample_filtered <- filter(sample_filtered, avg_basequality_A >= base_qual |
+                                     avg_basequality_T >= base_qual |
+                                     avg_basequality_C >= base_qual |
+                                     avg_basequality_G >= base_qual)
+
+#Deprecated, selecting every 2nd row for variants was a very silly idea 
+#sample_filtered_variants <- arrange(sample_filtered, chr, position)[seq(2, #nrow(sample_filtered), 2),]
+
+#Goals after talking with Linda
+## Identify variants using qual metrices, and those which ref base is different. Subset every other row - check manually. Bad idea... 
+
+#Now Linda suggested to drop all qual metrices and filter for positions from SFARI1000_SNVs_hg38.txt, which contains positions and identity of all SNVs in the library curated by SFARI.
+
+SNV_ref <- read.table("STAR408_SNPs_hg38.bed", header = TRUE)
+
+SNV_ref <- arrange(SNV_ref, Chr, Stop)
+SNV_ref$Chr <- gsub("chr","", SNV_ref$Chr)
+
+
+# Merging step keep only rows from SFARI
+# SNV positions are defined by a 2 bp interval (Start, Stop columns). Make sure that you correctly choose the position, avoiding off by 1 error.
+# Stop is the correct column in the SNV_ref - empirically verified.
+
+sample_filtered <- merge(sample_filtered, SNV_ref, by.x =c("chr", "position"), by.y = c("Chr", "Stop"))[,c(1:60, 62, 63, 64)]
+
+###
+
+#dim(sample_filtered)
+#dim(SNV_ref)
+#dim(sample_filtered_merged)
+#all(colnames(sample_filtered) == colnames(sample_filtered_merged))
+
+## Add a table with alt allele. 
+#Let's identify heterozygous positions in the amplicons
+#They look to be in every other row of the data frame
+
+#select(sample_filtered, chr,  position, reference_base, depth,  avg_basequality_A, avg_basequality_T, avg_basequality_C, avg_basequality_G)
+
+#select(sample_filtered, chr,  position, reference_base, depth, count_A, count_T, count_C, count_G)
+
+
+# Check if qual metrices are above 25. Then identify the base that is different than the reference. Annotate its identity in the Variant column. If more then one, annotate both of them. 
+  
+a <- sample_filtered
+
+#Calculating base/allele frequencies
+a$count_A <- as.numeric(as.character(a$count_A))
+a$count_T <- as.numeric(as.character(a$count_T))
+a$count_C <- as.numeric(as.character(a$count_C))
+a$count_G <- as.numeric(as.character(a$count_G))
+
+a$A_freq <- a$count_A / a$depth
+a$T_freq <- a$count_T / a$depth
+a$C_freq <- a$count_C / a$depth
+a$G_freq <- a$count_G / a$depth
+
+
+#Filtering variants for minimum base quality 25
+
+logic_df <-  as.data.frame(a[ ,c("avg_basequality_A", "avg_basequality_T", "avg_basequality_C", "avg_basequality_G")] > 25)
+  
+base_df <-  data.frame("A" = c(rep("A", nrow(a))), "T" =  c(rep("T", nrow(a))), "C" =  c(rep("C", nrow(a))), "G" =  c(rep("G", nrow(a))))
+
+
+logic_df <-  as.data.frame(a[ ,c("avg_basequality_A", "avg_basequality_T", "avg_basequality_C", "avg_basequality_G")] > 25)
+
+#Removing very low frequency alleles
+logic_df_freq <- as.data.frame(a[ ,c("A_freq", "T_freq", "C_freq", "G_freq")] > min_allele_freq)
+
+#Keeping only variants that are one of the two most abundant ones (eg. the reference + the alternative)
+
+freq_df <- a[ ,c("A_freq", "T_freq", "C_freq", "G_freq")]
+
+
+#maxn <- function(x) as.numeric(match(x, sort(x, decreasing = TRUE)))
+maxn <- function(x) as.numeric(rank(-x, ties.method = "average"))
+
+s <- t(apply(freq_df, 1, maxn))
+
+s <- as.data.frame(s)
+colnames(s) <- c("A_freq_ord", "T_freq_ord", "C_freq_ord", "G_freq_ord")
+
+
+#This is super ugly but it filteres only 2 (major + minor) alleles 
+curated_variants <- data.frame(
+"A" = ifelse(logic_df$avg_basequality_A == "TRUE" & logic_df_freq$A_freq & s$A_freq_ord %in% c(1,2), as.character(base_df$A), "NA"), 
+"T" = ifelse(logic_df$avg_basequality_T == "TRUE" & logic_df_freq$T_freq & s$T_freq_ord %in% c(1,2), as.character(base_df$T), "NA"),
+"C" = ifelse(logic_df$avg_basequality_C == "TRUE" & logic_df_freq$C_freq  & s$C_freq_ord %in% c(1,2), as.character(base_df$C), "NA"),
+"G" = ifelse(logic_df$avg_basequality_G == "TRUE" & logic_df_freq$G_freq  & s$G_freq_ord %in% c(1,2), as.character(base_df$G), "NA")
+)
+
+
+test <- paste(curated_variants$A, curated_variants$T, curated_variants$C, curated_variants$G)
+
+test <- gsub("NA", "", test, fixed = TRUE)
+test <- gsub(" ", "", test, fixed = TRUE)
+
+
+curated_variants$reference_base <- a$reference_base
+
+curated_variants$variants <- str_remove(test, as.character(a$reference_base))
+curated_variants$variants[curated_variants$variants==""] <- "-"
+
+
+short_df <- data.frame(
+  "chr" = a$chr,
+  "position" = a$position,
+  "SNP_ID" = a$SNP_ID,
+  "Group" = a$Group,
+  "Name" = a$Name,
+  "reference_base" = a$reference_base,
+  "var_base_qual_25" = curated_variants$variants,
+  "depth" = a$depth,
+  "count_A" = as.numeric(as.character(a$count_A)),
+  "count_T" = as.numeric(as.character(a$count_T)),
+  "count_C" = as.numeric(as.character(a$count_C)),
+  "count_G" = as.numeric(as.character(a$count_G)),
+  "avg_mapping_quality_A" = a$avg_mapping_quality_A,
+  "avg_mapping_quality_T" = a$avg_mapping_quality_T,
+  "avg_mapping_quality_C" = a$avg_mapping_quality_C,
+  "avg_mapping_quality_G" = a$avg_mapping_quality_G,
+  "avg_basequality_A" = a$avg_basequality_A,
+  "avg_basequality_T" = a$avg_basequality_T,
+  "avg_basequality_C" = a$avg_basequality_C,
+  "avg_basequality_G" = a$avg_basequality_G
+)
+
+
+short_df$A_freq <- short_df$count_A / short_df$depth
+short_df$T_freq <- short_df$count_T / short_df$depth
+short_df$C_freq <- short_df$count_C / short_df$depth
+short_df$G_freq <- short_df$count_G / short_df$depth
+
+rownames(short_df) <- NULL
+
+#short_df
+
+########
+
+# Major minor allele freq and bases
+major_allele <- apply(as.matrix(short_df[, 21:24]), 1, function(x) which.max(x))
+
+
+minor_allele <- apply(as.matrix(short_df[, 21:24]), 1, function(x) {
+  
+  min_al <- which(as.numeric(x) == sort(x)[3])
+  ifelse(length(min_al) > 1, "NA", min_al) # NA if multiple ties, most likely 0s 
+  
+})
+
+
+major_allele_base <- ifelse(major_allele == 1, "A", "NA")
+major_allele_base <- ifelse(major_allele == 2, "T", major_allele_base)
+major_allele_base <- ifelse(major_allele == 3, "C", major_allele_base)
+major_allele_base <- ifelse(major_allele == 4, "G", major_allele_base)
+
+minor_allele_base <- ifelse(minor_allele == 1, "A", "NA")
+minor_allele_base <- ifelse(minor_allele == 2, "T", minor_allele_base)
+minor_allele_base <- ifelse(minor_allele == 3, "C", minor_allele_base)
+minor_allele_base <- ifelse(minor_allele == 4, "G", minor_allele_base)
+
+
+major_allele_freq <- apply(as.matrix(short_df[, 21:24]), 1, function(x) max(x))
+
+minor_allele_freq <- apply(as.matrix(short_df[, 21:24]), 1, function(x) {
+  min_al_base <- sort(x)[3]
+})
+
+ref_allele_freq <- apply(as.matrix(short_df[,c(6, 21:24)]), 1, function(x) {
+  if (x[1] == "A"){
+    x[2]
+  } else if (x[1] == "T"){
+    x[3]
+  } else if (x[1] == "C"){
+    x[4]
+  } else if (x[1] == "G"){
+    x[5]
+  } else {
+    "NA"
+    }
+})
+
+
+  
+short_df$major_allele_base <- major_allele_base
+short_df$minor_allele_base <- minor_allele_base
+short_df$major_allele_freq <- major_allele_freq
+short_df$minor_allele_freq <- minor_allele_freq
+short_df$ref_allele_freq <- ref_allele_freq
+
+short_df$major_allele_is_base <- short_df$reference_base == short_df$major_allele_base
+
+short_df
+}
+
+```
+
+
+
+```{r}
+# Function call usage. 1) variant df from the previous step, 2) min base qual, 3) min allele frequency to be called - low threshold removes calls with two or more alt alleles.
+
+# Maxiprep
+Maxiprep_processed <- variant_processing(Maxiprep, 25, 0.01)
+
+# DNA
+L1_DNA_processed <- variant_processing(L1_DNA, 25, 0.01)
+L2_DNA_processed <- variant_processing(L2_DNA, 25, 0.01)
+L3_DNA_processed <- variant_processing(L3_DNA, 25, 0.01)
+L4_DNA_processed <- variant_processing(L4_DNA, 25, 0.01)
+R1_DNA_processed <- variant_processing(R1_DNA, 25, 0.01)
+
+# RNA 
+L1_RNA_processed <- variant_processing(L1_RNA, 25, 0.01)
+L2_RNA_processed <- variant_processing(L2_RNA, 25, 0.01)
+L3_RNA_processed <- variant_processing(L3_RNA, 25, 0.01)
+L4_RNA_processed <- variant_processing(L4_RNA, 25, 0.01)
+R1_RNA_processed <- variant_processing(R1_RNA, 25, 0.01)
+L4_High35_RNA_processed <- variant_processing(L4_High35_RNA, 25, 0.01)
+
+
+
+#Checks if there are any double or tripple variants called. There are a few alleles like that. This should be cleaned further by splitting the multi character strings and filtering the alternative allele with higher frequency. Increased minor allele threshold would also help
+
+var_obj <- list(Maxiprep_processed, L1_DNA_processed, L2_DNA_processed, L3_DNA_processed, L4_DNA_processed, R1_DNA_processed, L1_RNA_processed, L2_RNA_processed, L3_RNA_processed, L4_RNA_processed, R1_RNA_processed, L4_High35_RNA_processed)
+
+multi_alleles <- sapply(var_obj, function(x) filter(x, var_base_qual_25 %in% unique(Filter(function(x) nchar(x) >= 2, as.character(x$var_base_qual_25)))))
+
+multi_alleles_list <- lapply(var_obj, function(x) filter(x, var_base_qual_25 %in% unique(Filter(function(x) nchar(x) >= 2, as.character(x$var_base_qual_25)))))
+
+#Writing _var.csv files
+setwd("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408/Allele_counts")
+
+names(var_obj) <- c("Maxiprep_var", "L1_DNA_var", "L2_DNA_var", "L3_DNA_var", "L4_DNA_var", "R1_DNA_var", "L1_RNA_var", "L2_RNA_var", "L3_RNA_var", "L4_RNA_var", "R1_RNA_var", "L4_High35_RNA_var")
+
+lapply(1:length(var_obj), function(x) write.csv(var_obj[[x]], file = paste0(names(var_obj[x]), ".csv"), quote = F, row.names = F))
+
+```
+
