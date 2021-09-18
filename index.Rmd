@@ -2914,8 +2914,7 @@ knitr::kable(arrange(epi_p_table_2D, Epi_mark))
 
 ```
 
-# 12. Values reported in the text - verify!
-
+# 12. Values reported in the text
 ```{r, class.source = "fold-show", cache = TRUE}
 sum(data.all$Maxi_counts > 200)
 
@@ -3509,7 +3508,7 @@ SNP_panelC <- ggplot(df_m, aes(x = value, color = Nucleic_acid))+
 
 ## 14.1 Figure 2–figure supplement 4DE
 
-```{r, fig.show="hold", out.width="50%", fig.width=10, fig.height=6, fig.cap="Figure 2–figure supplement 4DE. Allele-specific analysis of MPRA activity. (D) Correlation of allele-specific amplicons in genomic DNA (“DNA”) across biological replicates after filtering for only allele-informative reads. (E) Correlation of allele-specific amplicons in cDNA (“RNA”) across biological and technical replicates after filtering for only allele-informative reads. Data for D and E is shown as log2(proportion) per allelic amplicon. Pearson correlation is shown for each pairwise comparison over the filtered dataset (n = 77 biallelic SNPs). *** indicate correlation P < 0.001."}
+```{r, fig.show="hold", out.width="50%", fig.width=8, fig.height=8, fig.cap="Figure 2–figure supplement 4DE. Allele-specific analysis of MPRA activity. (D) Correlation of allele-specific amplicons in genomic DNA (“DNA”) across biological replicates after filtering for only allele-informative reads. (E) Correlation of allele-specific amplicons in cDNA (“RNA”) across biological and technical replicates after filtering for only allele-informative reads. Data for D and E is shown as log2(proportion) per allelic amplicon. Pearson correlation is shown for each pairwise comparison over the filtered dataset (n = 77 biallelic SNPs). *** indicate correlation P < 0.001."}
 # D. Maxi + DNA reps for allele freq correlation
 
 ## 77 set ##
@@ -3749,7 +3748,7 @@ plot_grid(SNP_panelA, SNP_panelC, SNP_panelF, SNP_panelG2, labels = c("A", "C", 
 ```
 
 
-# 15. FB DHS peak intersections by amp. group
+# 15. FB DHS intersections by amp. group
 
 ```{r}
 
@@ -3866,7 +3865,7 @@ All_PutEnh <- unique(filter(y, ascertainment_group == "PutEnh")$Amp_name)
 ```
 
 
-# 16. Neuron ATAC intersections by amp. group
+# 16. Neuron ATAC intersect. by amp. group
 
 ```{r}
 
@@ -3900,7 +3899,7 @@ knitr::kable(neuron_ATAC_intersect_summary)
 ```
 
 
-# 17. MPRA intersection with epigenomic marks
+# 17. MPRA intersection with epi. marks
 
 ```{r, cache = TRUE}
 
@@ -4057,8 +4056,9 @@ ATAC_amplicons <- unlist(map(strsplit(ATAC_amplicons, split = "_"), 1))
 #intersect(DNase_amplicons, ATAC_amplicons) # 52 are both DNase and ATAC peaks
 ```
 
+## 17.1 MPRA intersecting with FBDHS and neuron ATAC signatures
 
-```{r, "MPRA amplicons intersecting with FBDHS and neuron ATAC signatures. Venn diagram illustrating overlap of the signatures in our MPRA"}
+```{r, fig.cap="MPRA amplicons intersecting with FBDHS and neuron ATAC signatures. Numbers and the area of Venn diagram indicate numbers of MPRA amplicons intersecting with each or both epigenomic marks"}
 
 library(Vennerable)
 
@@ -4153,7 +4153,8 @@ colnames(epi_peak_ind) <- c(colnames(epi_peak_ind)[1:5],
 
 ```
 
-```{r, cache = TRUE, fig.cap="MPRA amplicon intersection with epigenomic signatures"}
+## 17.2 MPRA amplicons intersecting with epi. marks.
+```{r, cache = TRUE}
 
 datatable(epi_peak_ind, 
           rownames = FALSE, 
@@ -4163,18 +4164,20 @@ datatable(epi_peak_ind,
 
 ```
 
+## 17.3 Fishers test for the enrichment of active amplicons among the presumed positive amplicons
 
-```{r, fig.cap="Fisher test for enrichment among the 17 most active MPRA amplicons...."}
+Presumed positive are 126 amplicons intersecting with FBDHS and neuron ATAC signatures
+```{r, fig.cap="Fisher test for enrichment among the 41 amplicons passing P < 0.05 among the presumed positive amplicons."}
 
 # Intersections for the 17 most sig enhancers - Fisher test
 
 positive_amplicons_FDR <- data.predict_fdr[data.predict_fdr$qval_fdrtool, "Amp_name"]
 positive_amplicons_FDR <- unlist(map(strsplit(positive_amplicons_FDR, split = "_"), 1)) # 17
 
-length(intersect(presumed_positive, positive_amplicons_FDR)) #12
+#length(intersect(presumed_positive, positive_amplicons_FDR)) #12
 
 
-# Contingency table for the fisher test
+# Contingency table for the fisher test, 41 amplicons passing P < 0.05
 
 #length(intersect(positive_amplicons, presumed_positive)) # 20
 #length(intersect(positive_amplicons, presumed_negative)) # 21
@@ -4194,6 +4197,10 @@ cont_table <- data.frame("Active" = c(20, 21),
                          row.names = c("Pres_pos", "Pres_neg"))
 
 fisher.test(cont_table, alternative="greater")
+```
+
+
+```{r, fig.cap="Fisher test for enrichment among the 17 amplicons passing FDR < 0.1 among the presumed positive amplicons."}
 
 
 ### For the FDR set of 17
@@ -4218,13 +4225,13 @@ fisher.test(cont_table, alternative="greater")
 
 ```
 
-## Amplicons with polyA sequences 
+# 18. polyA signals in amplicon sequences 
 
 ```{r}
 
 #data.predict <- read.csv("G:/Shared drives/Nord Lab - Temp Overflow/STARR-408_Lambert&Su-Feher/eLife submission/Resubmission/Supp_Tables/Supplementary Table 4, lm_308_data.csv")
 
-"Also, sequences containing elements that would have obvious negative consequences (e.g., poly A signals) on the assay might need to be filtered out, especially when looking at repressive sequences."
+#"Also, sequences containing elements that would have obvious negative consequences (e.g., poly A signals) on the assay might need to be filtered out, especially when looking at repressive sequences."
 
 #in_silico_PCR <- read.csv("G:/Shared drives/Nord Lab - Temp Overflow/STARR-408_Lambert&Su-Feher/eLife submission/Resubmission/Supp_Tables/Supplementary Table 9, In silico PCR.csv")
 
@@ -4233,11 +4240,11 @@ in_silico_PCR <- df_in_silico_supp
 Amp_w_polyA <- in_silico_PCR$UNIQID[grepl("AATAAA", in_silico_PCR$Sequence_GRCh38)]
 Amp_w_polyA <- unlist(map(strsplit(Amp_w_polyA, split = "_"), 1))
 
-as.data.frame(table(Amp_w_polyA))
+#as.data.frame(table(Amp_w_polyA))
 
-length(Amp_w_polyA)  # 251
+#length(Amp_w_polyA)  # 251
 
-length(intersect(Amp_w_polyA, data.predict$Amp_number)) #167
+#length(intersect(Amp_w_polyA, data.predict$Amp_number)) #167
 
 data.predict$Amp_number <- unlist(map(strsplit(as.character(data.predict$Amp_name), split = "_"), 1))
 
@@ -4248,9 +4255,15 @@ data.predict$Includes_polyA <- data.predict$Amp_number %in% Amp_w_polyA
 ggplot(data.predict, aes(x = log2(DNA_prop_mean), y = log2(RNA_prop_mean), color = Includes_polyA))+
   geom_point()+
   theme_bw()+
-  scale_color_manual(values = c("grey", "blue"))
+  scale_color_manual(values = c("grey", "blue"))+
+  labs(title = "Presence of polyA signal does is not a predictor \n of amplicon activity or its abundance")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
 
 
+```{r, eval=FALSE}
+# I'm just going deep on the presence of polyA signal, which is unnecessary.
 
 significant_amp <- filter(data.predict, Pvalue < 0.05)$Amp_number
 non_sig_amp <- filter(data.predict, Pvalue >= 0.05)$Amp_number
@@ -4258,15 +4271,15 @@ non_sig_amp <- filter(data.predict, Pvalue >= 0.05)$Amp_number
 polyA_amp <- filter(data.predict, Includes_polyA == TRUE)$Amp_number
 non_polyA_amp <- filter(data.predict, Includes_polyA == FALSE)$Amp_number
 
-length(polyA_amp) # 167
-length(non_polyA_amp) # 141
+#length(polyA_amp) # 167
+#length(non_polyA_amp) # 141
 
 
-length(intersect(significant_amp, polyA_amp))
-length(intersect(significant_amp, non_polyA_amp))
+#length(intersect(significant_amp, polyA_amp))
+#length(intersect(significant_amp, non_polyA_amp))
 
-length(intersect(non_sig_amp, polyA_amp))
-length(intersect(non_sig_amp, non_polyA_amp))
+#length(intersect(non_sig_amp, polyA_amp))
+#length(intersect(non_sig_amp, non_polyA_amp))
 
                # Sig  # Non_sig  
 # poly_A          27       140  
@@ -4312,15 +4325,21 @@ BIC(lm(log2(RNA_prop_mean) ~ log2(DNA_prop_mean),
 
 
 # Correlations are very low too
-cor(data.predict$Residuals_Z_scaled_to_lm, data.predict$Includes_polyA, method = "pearson")
-cor(data.predict$Residuals_Z_scaled_to_lm, data.predict$Includes_polyA, method = "kendall")
-cor(data.predict$Residuals_Z_scaled_to_lm, data.predict$Includes_polyA, method = "spearman")
+#cor(data.predict$Residuals_Z_scaled_to_lm, data.predict$Includes_polyA, method = "pearson")
+#cor(data.predict$Residuals_Z_scaled_to_lm, data.predict$Includes_polyA, method = "kendall")
+#cor(data.predict$Residuals_Z_scaled_to_lm, data.predict$Includes_polyA, method = "spearman")
 
 ```
 
+# 19. Count histograms and CV
 
-```{r}
-# I'd like to see a histogram of the count number of the elements in the DNA library. I am just curious about the range between the best and least cloned elements. Presumably the least well cloned elements are also the 25% that were filtered out? 
+These plots were generated in response to a Reviewer's question:
+
+"I'd like to see a histogram of the count number of the elements in the DNA library. I am just curious about the range between the best and least cloned elements. Presumably the least well cloned elements are also the 25% that were filtered out?"
+
+"Also, perhaps some scatter plot of DNA read depth vs. coefficient of variation (with color coding of the 25% filtered out) might make a nice supplement, and provide a benchmark for future improvements to the method."
+
+```{r, fig.width=12, fig.height=6}
 
 p1 <- ggplot(data.all, aes(x = Maxi_counts))+
   geom_histogram(bins = 30, alpha = 0.5)+
@@ -4331,7 +4350,7 @@ p1 <- ggplot(data.all, aes(x = Maxi_counts))+
   
 
 
-#Also, perhaps some scatter plot of DNA read depth vs. coefficient of variation (with color coding of the 25% filtered out) might make a nice supplement, and provide a benchmark for future improvements to the method.
+
 
 CV_df <- data.frame("Cloned" = data.all$Maxi_counts > 200,
            "SD" = data.all$DNA_count_SD,
@@ -4355,7 +4374,9 @@ plot_grid(p1, p2)
 
 ```
 
+# 20. Amplicon activity by group 
 
+## 20.1 Activity boxplot by group
 ```{r}
 
 #data.predict_supp <- read.csv("G:/Shared drives/Nord Lab - Temp Overflow/STARR-408_Lambert&Su-Feher/eLife #submission/Resubmission/Supp_Tables/Supplementary Table 4, lm_308_data.csv")
@@ -4370,10 +4391,17 @@ ggplot(data.predict_supp, aes(x = Group, y = Residuals_Z_scaled_to_lm))+
   geom_hline(yintercept = 0, linetype = 2)+
   labs(x = "")
 
+```
 
+## 20.2 ANOVA on 4 groups
+```{r}
 one_way_aov <- aov(Residuals_Z_scaled_to_lm ~ Group, data.predict_supp)
 summary(one_way_aov)
 
+```
+
+## 20.3 ANOVA wo PutEnh
+```{r}
 
 data.predict_supp_3_groups <- filter(data.predict_supp, Group != "PutEnh")
 
@@ -4383,11 +4411,12 @@ summary(one_way_aov)
 
 # dt[ ,list(mean=mean(col_to_aggregate)), by=col_to_group_by]
 
-dt <- data.table(data.predict_supp)
-dt[ ,list(mean=mean(Residuals_Z_scaled_to_lm)), by=Group]
+#dt <- data.table(data.predict_supp)
+#dt[ ,list(mean=mean(Residuals_Z_scaled_to_lm)), by=Group]
 
 ```
 
+# 21. Epigenomic predictors of MPRA activity 
 
 ```{r}
 # "or the efficicacy of epigenetic marks at predicting function by comparing the 'hit rates' between these 4 libraries"
@@ -4399,9 +4428,9 @@ dt[ ,list(mean=mean(Residuals_Z_scaled_to_lm)), by=Group]
 
 epi_predict <- merge(epi_peak_ind, data.predict_supp[,c("Amp_number", "DNA_prop_mean", "RNA_prop_mean", "GC")])
 
-str(epi_predict)
+#str(epi_predict)
 
-colSums(epi_predict[,c(6:17)])
+#colSums(epi_predict[,c(6:17)])
 
 # 6 to 17
 
@@ -4441,30 +4470,17 @@ lm_epi_predict_P <- data.frame("Epigenomic_predictor" = colnames(epi_predict)[6:
                                "BIC_with_epi_mark"  = lm_epi_BIC,
                                "Model_improved_by_BIC" = lm_epi_BIC < lm_BIC_wo_epi
                                )
+```
 
-lm_epi_predict_P
+```{r}
+
+datatable(
+  lm_epi_predict_P, 
+  rownames = FALSE, options = list(pageLength = 25))
 
 # This is the final image 
 # save.image("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408/Session_09_13_2021.RData")
 # load("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408/Session_09_13_2021.RData")
-
-# Just out of curiosity, all covariates at once
-
-summary(glm(RNA_prop_mean ~ DNA_prop_mean + GC 
-            + DNase_Roadmap
-            + H3K27me3_Roadmap
-            + H3K36me3_Roadmap
-            + H3K4me1_Roadmap
-            + H3K4me3_Roadmap
-            + H3K9me3_Roadmap
-            + Fetal.Brain.TF.Footprints_BOCA
-            + Fetal.Lung.TF.Footprints_BOCA
-            + K562.cells.TF.Footprints_BOCA
-            + ATAC.seq..Human.Neurons_BOCA
-            + ATAC.seq..Human.Glia_BOCA
-            + Conserved.Element_BOCA,
-            
-    data = epi_predict))
 
 ```
 
