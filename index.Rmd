@@ -39,8 +39,8 @@ library(DT)
 library(GenomicRanges)
 
 # Directory structure
-github_dir <- file.path("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408")
-
+#github_dir <- file.path("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408")
+github_dir <- file.path("./")
 
 setwd(github_dir)
 
@@ -709,9 +709,8 @@ plot_grid(GC4, GC5,labels = "AUTO", nrow = 1, rel_widths = c(2, 1))
 
 ```{r, eval=FALSE}
 
-github_dir <- file.path("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408")
-
-setwd(github_dir)
+#github_dir <- file.path("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408")
+setwd("./")
 
 
 # Saving a Supp Table with primers
@@ -2397,7 +2396,7 @@ sapply(download_files, function(x)
 # I'm merging primers and star datasets to translate GRCh38 to hg19.
 # Primers use hg19 coordinates. star408 amplicons use GRCh38 coordinates. isPCR was also run against GRCh38 genome.
 
-primers <- read.csv("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408/In_silico_PCR_STAR408/STAR408_primers.csv", header = TRUE, fill = TRUE)
+primers <- read.csv("./In_silico_PCR_STAR408/STAR408_primers.csv", header = TRUE, fill = TRUE)
 
 primers$Chr <- gsub('.*?([0-9XY]+).*', '\\1', primers$Amplicon.Range)
 amp_range <- gsub('.*?[0-9XY]+:(d*)+d*', '\\1', primers$Amplicon.Range)
@@ -2528,7 +2527,7 @@ df_m
 # Male and Female "E081", "E082" datasets are merged together in this approach. Intersection indicates overlap between any of the samples.
 
 
-# This is loaded from a file to speed up report generation
+# The output is loaded from a file to speed up report generation
 if(file.exists("Epi_interst.RData")){
   
   load("Epi_interst.RData")
@@ -2651,7 +2650,7 @@ knitr::kable(arrange(epi_p_table_2C, Epi_mark))
 # Yurong Wang calculated epigenomic intersections using a set of 321 MPRA amplicons. In a revised version of this analysis swe decided to limit the reported set to 308
 
 # Move this file up in the file structure
-y_data <- read.csv("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408/Epigenomics_intersections/STAR408_cleaned_dataset_TF_PhastCons_ATAC_321_amplicons.csv")
+y_data <- read.csv("./STAR408_cleaned_dataset_TF_PhastCons_ATAC_321_amplicons.csv")
 
 #setdiff(data.predict$Amp_name2, y_data$Amp_name2) # the set of 321 includes the set of 308.
 #setdiff(y_data$Amp_name2, data.predict$Amp_name2) # 13 extra amplicons in a set of 321
@@ -3187,7 +3186,7 @@ Bam files were processed using bam-readcount and the MPRA_v2_file_conversion.Rmd
 
 ```{r, cache = TRUE}
 
-setwd("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408/Allele_counts")
+setwd("./Allele_counts")
 
 Maxiprep <- read.csv("Maxiprep_var.csv")
 
@@ -3377,7 +3376,7 @@ DNA_RNA_merged_filtered <- filter(DNA_RNA_merged,
 
 
 # Filtering only amplicons that passed our QC in amplicons analysis - the set of 308.
-data_predict <- read.csv("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408/data_predict_308.csv")
+data_predict <- read.csv("./data_predict_308.csv")
 
 data_predict$Amplicon_number <- unlist(map(strsplit(data_predict$Amp_name, split = "_"), 1))
 
@@ -3757,7 +3756,7 @@ plot_grid(SNP_panelA, SNP_panelC, SNP_panelF, SNP_panelG2, labels = c("A", "C", 
   samples <- c("E081", "E082")
     
  ### Pre-processing and filtering data ###
-    peak_dir <- "G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408/Roadmap_consolidated_peaks/"
+    peak_dir <- "./Roadmap_consolidated_peaks/"
     
     E_sample_list <- lapply(samples, function(x) read.table(paste0(peak_dir, x, "-", mark, ".narrowPeak")))
     E_samples <- rbindlist(E_sample_list)
@@ -3913,7 +3912,7 @@ amp_intersection_peak_freq <- function(mark){
   samples <- c("E081", "E082")
     
  ### Pre-processing and filtering data ###
-    peak_dir <- "G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408/Roadmap_consolidated_peaks/"
+    peak_dir <- "./Roadmap_consolidated_peaks/"
     
     E_sample_list <- lapply(samples, function(x) read.table(paste0(peak_dir, x, "-", mark, ".narrowPeak")))
     E_samples <- rbindlist(E_sample_list)
