@@ -45,6 +45,7 @@ github_dir <- file.path("./")
 setwd(github_dir)
 
 
+
 # Global R markdown code chunk options
 knitr::opts_chunk$set(message=FALSE, 
                       warning = FALSE, 
