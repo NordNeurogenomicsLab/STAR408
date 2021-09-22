@@ -42,6 +42,7 @@ library(GenomicRanges)
 #github_dir <- file.path("G:/Shared drives/Nord Lab - Computational Projects/MPRA/STAR408")
 github_dir <- file.path("./")
 
+
 setwd(github_dir)
 
 
